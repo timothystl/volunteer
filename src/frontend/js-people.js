@@ -92,7 +92,7 @@ function renderPeopleDesktop(people) {
   if (!people.length) { c.innerHTML = '<div class="empty" style="padding:40px 24px;"><div class="empty-icon">&#128100;</div>' + (_archiveView ? 'No archived people found' : 'No people found') + '</div>'; return; }
   var isOrg, isSelected, displayName, avInner, avClass, clickHandler, tags, tagHtml, trCls;
   var rows = people.map(function(p) {
-    isOrg = p.member_type === 'organization';
+    isOrg = (p.member_type||'').toLowerCase() === 'organization';
     isSelected = _selectedPeople.has(p.id);
     displayName = isOrg
       ? esc(p.first_name || p.last_name)
@@ -279,7 +279,7 @@ function calcAge(ds) {
 }
 function showProfile(p) {
   _currentPvPerson = p;
-  var isOrg = p.member_type === 'organization';
+  var isOrg = (p.member_type||'').toLowerCase() === 'organization';
   var displayName = isOrg ? (p.first_name||p.last_name||'Unnamed') : ((p.first_name||'')+' '+(p.last_name||'')).trim();
   var tn = document.getElementById('pv-topbar-name');
   if (tn) tn.textContent = displayName;
@@ -315,7 +315,8 @@ function showProfile(p) {
   var bdEl = document.getElementById('pv-badge');
   if (bdEl) {
     var mt = p.member_type||'visitor';
-    var badgeClass = mt === 'member' ? 'dir-badge-member' : mt === 'organization' ? 'dir-badge-organization' : 'dir-badge-visitor';
+    var mtL = mt.toLowerCase();
+    var badgeClass = mtL === 'member' ? 'dir-badge-member' : mtL === 'organization' ? 'dir-badge-organization' : 'dir-badge-visitor';
     var statusHtml = '';
     if (p.status === 'archived') statusHtml = ' <span style="font-size:.7rem;padding:2px 8px;border-radius:99px;background:#8b735522;color:#8b7355;border:1px solid #8b735544;">Archived</span>';
     else if (p.status === 'deceased') statusHtml = ' <span style="font-size:.7rem;padding:2px 8px;border-radius:99px;background:#6c757d22;color:#6c757d;border:1px solid #6c757d44;">&#x271D; Deceased' + (p.death_date ? ' '+esc(p.death_date) : '') + '</span>';
@@ -324,7 +325,7 @@ function showProfile(p) {
   var saEl = document.getElementById('pv-status-actions');
   if (saEl && _userRole !== 'member') {
     var pStatus = p.status || 'active';
-    var inviteBtn = (mt === 'member' && pStatus === 'active' && p.email)
+    var inviteBtn = (mtL === 'member' && pStatus === 'active' && p.email)
       ? '<button class="btn-secondary role-admin role-staff" style="font-size:.76rem;padding:3px 9px;color:var(--sky-steel);" onclick="sendPortalInvite('+p.id+')">&#128231; Invite to Portal</button>'
       : '';
     if (pStatus === 'active') {
@@ -1613,7 +1614,7 @@ function openPersonEdit(p) {
     if (match) pmType.value = match.value;
   }
   updatePersonNameMode();
-  if (!isNew && p.member_type === 'organization') document.getElementById('pm-org-name').value = p.first_name||'';
+  if (!isNew && (p.member_type||'').toLowerCase() === 'organization') document.getElementById('pm-org-name').value = p.first_name||'';
   document.getElementById('pm-role').value = isNew ? '' : (p.family_role||'');
   document.getElementById('pm-gender').value = isNew ? '' : (p.gender||'');
   document.getElementById('pm-marital').value = isNew ? '' : (p.marital_status||'');
@@ -1674,7 +1675,7 @@ function getSelectedTagIds() {
   return ids;
 }
 function updatePersonNameMode() {
-  var isOrg = document.getElementById('pm-type').value === 'organization';
+  var isOrg = (document.getElementById('pm-type').value||'').toLowerCase() === 'organization';
   document.getElementById('pm-name-2col').style.display = isOrg ? 'none' : '';
   document.getElementById('pm-name-1col').style.display = isOrg ? '' : 'none';
   document.getElementById('pm-role-field').style.display = isOrg ? 'none' : '';
@@ -1684,7 +1685,7 @@ function updatePersonNameMode() {
 }
 function savePerson() {
   var id = document.getElementById('pm-id').value;
-  var isOrg = document.getElementById('pm-type').value === 'organization';
+  var isOrg = (document.getElementById('pm-type').value||'').toLowerCase() === 'organization';
   var first_name = isOrg ? document.getElementById('pm-org-name').value.trim()
                          : document.getElementById('pm-first').value.trim();
   var last_name  = isOrg ? '' : document.getElementById('pm-last').value.trim();

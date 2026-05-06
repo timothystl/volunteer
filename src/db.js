@@ -545,6 +545,9 @@ async function _doInitDb(db) {
   for (const m of migrations) {
     try { await db.prepare(m).run(); } catch(e) { /* column already exists */ }
   }
+  // Normalize member_type to lowercase so frontend comparisons are consistent
+  await db.prepare("UPDATE people SET member_type=LOWER(member_type) WHERE member_type != LOWER(member_type)").run().catch(() => {});
+
   await seedEvents(db);
   await migrateChristmasMarketRoles(db);
   await seedChmsDefaults(db);
