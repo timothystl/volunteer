@@ -71,17 +71,25 @@ async function sendInviteEmail(env, toEmail, toName, token, isReset) {
     ? `<p>Hi ${escHtml(toName)},</p><p>Click the link below to reset your Member Portal password. This link expires in 7 days.</p><p><a href="${link}">Reset Password</a></p><p>If you didn't request this, ignore this email.</p>`
     : `<p>Hi ${escHtml(toName)},</p><p>You've been invited to the Timothy Lutheran Church Member Portal, where you can view the church directory, your volunteer schedule, and prayer requests.</p><p><a href="${link}" style="background:#0A3C5C;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;">Set Up Your Account</a></p><p>This link expires in 7 days.</p>`;
 
-  if (!env.RESEND_API_KEY) return;
-  await fetch('https://api.resend.com/emails', {
+  if (!env.RESEND_API_KEY) {
+    console.error('sendInviteEmail: RESEND_API_KEY not set');
+    return { error: 'RESEND_API_KEY not configured' };
+  }
+
+  const fromAddr = env.EMAIL_FROM || 'Timothy Lutheran <noreply@timothystl.org>';
+  const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: env.EMAIL_FROM || 'Timothy Lutheran <noreply@timothystl.org>',
-      to: [toEmail],
-      subject,
-      html: body,
-    }),
-  }).catch(() => {});
+    body: JSON.stringify({ from: fromAddr, to: [toEmail], subject, html: body }),
+  }).catch(e => { console.error('sendInviteEmail fetch error:', e.message); return null; });
+
+  if (!res) return { error: 'Network error sending email' };
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    console.error(`sendInviteEmail Resend error ${res.status} to ${toEmail} from ${fromAddr}:`, errText);
+    return { error: `Resend ${res.status}: ${errText}` };
+  }
+  return { ok: true };
 }
 
 // ── Route dispatcher ──────────────────────────────────────────────────────────
@@ -139,7 +147,10 @@ export async function handleSendInvite(req, env, personId) {
   await db.prepare('INSERT INTO member_invite_tokens (token,people_id,email,expires_at) VALUES (?,?,?,?)')
     .bind(token, personId, p.email, expiresAt).run();
 
-  await sendInviteEmail(env, p.email, p.first_name || p.last_name, token, false);
+  const emailResult = await sendInviteEmail(env, p.email, p.first_name || p.last_name, token, false);
+  if (emailResult && emailResult.error) {
+    return json({ ok: false, error: 'Token created but email failed: ' + emailResult.error, email: p.email }, 500);
+  }
   return json({ ok: true, email: p.email });
 }
 
