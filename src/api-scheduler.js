@@ -239,7 +239,7 @@ export async function schedKvPut(env, key, value) {
 
 // ── /email/send ──────────────────────────────────────────────────────────────
 export async function handleSchedEmailSend(req, env) {
-  const resendKey = req.headers.get('X-Resend-Key') || env.RESEND_API_KEY || '';
+  const resendKey = env.RESEND_API_KEY || req.headers.get('X-Resend-Key') || '';
   const emailFrom = req.headers.get('X-Email-From') || env.EMAIL_FROM || '';
   if (!resendKey) return schedJson({ error: 'Missing Resend API key' }, 400);
   let body;
