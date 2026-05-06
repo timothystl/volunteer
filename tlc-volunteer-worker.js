@@ -21,7 +21,7 @@ import { LOGIN_HTML, PUBLIC_HTML, ADMIN_HTML } from './src/html-templates.js';
 import { CHMS_HTML, CHMS_MANIFEST_JSON, SW_JS, BACKLOG_HTML } from './src/html-chms.js';
 import { PORTAL_HTML, PORTAL_MANIFEST_JSON } from './src/portal-html.js';
 import { PORTAL_SW_JS } from './src/portal-sw-js.js';
-import { handleMemberApi } from './src/api-member.js';
+import { handleMemberApi, getMemberAuth } from './src/api-member.js';
 import { sendBirthdayEmails, sendAnniversaryEmails, sendBirthdayTexts, sendAnniversaryTexts } from './src/api-emails.js';
 import { sendWebPush } from './src/push-sender.js';
 
@@ -215,6 +215,18 @@ async function _fetch(req, env) {
     if (path === '/portal-sw.js') {
       return new Response(PORTAL_SW_JS, {
         headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache, no-store' }
+      });
+    }
+    // Member R2 photo proxy — uses tlc-member cookie instead of admin cookie
+    if (path.startsWith('/member/r2photo/') && method === 'GET') {
+      if (!(await getMemberAuth(req, env))) return new Response('Unauthorized', { status: 401 });
+      if (!env.PHOTOS) return new Response('Not configured', { status: 503 });
+      const r2Key = decodeURIComponent(path.slice('/member/r2photo/'.length));
+      if (!r2Key) return new Response('Missing key', { status: 400 });
+      const obj = await env.PHOTOS.get(r2Key);
+      if (!obj) return new Response('Not found', { status: 404 });
+      return new Response(obj.body, {
+        headers: { 'Content-Type': obj.httpMetadata?.contentType || 'image/jpeg', 'Cache-Control': 'private, max-age=86400' }
       });
     }
     // Member API (uses tlc-member cookie; no admin auth required)
