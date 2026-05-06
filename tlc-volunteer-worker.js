@@ -195,8 +195,17 @@ async function _fetch(req, env) {
     }
     // ── Member portal ──────────────────────────────────────────────────
     // SPA at /portal (no auth check — the SPA handles login client-side)
-    if (path === '/portal' || path === '/portal/' || path.startsWith('/portal/verify/')) {
+    if (path === '/portal' || path === '/portal/') {
       return html(PORTAL_HTML, 200, { 'Cache-Control': 'no-store, no-cache, must-revalidate' });
+    }
+    // Verify token routes — handled server-side (renders set-password form)
+    if (path.startsWith('/portal/verify/')) {
+      try {
+        return await handleMemberApi(req, env, path, method);
+      } catch (e) {
+        console.error('Portal verify error [' + method + ' ' + path + ']:', e?.message, e?.stack);
+        return html('<p>Something went wrong. Please request a new invite link.</p>', 500);
+      }
     }
     if (path === '/portal.webmanifest') {
       return new Response(PORTAL_MANIFEST_JSON, {
@@ -296,9 +305,8 @@ async function _fetch(req, env) {
         // If no image yet, keep trying (response body is consumed so we can't reuse)
       }
       if (!upstream) {
-        // All attempts failed — return a transparent 1×1 GIF so onerror fires gracefully
-        const gif = new Uint8Array([71,73,70,56,57,97,1,0,1,0,128,0,0,0,0,0,255,255,255,33,249,4,0,0,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,68,1,0,59]);
-        return new Response(gif, { status: 200, headers: { 'Content-Type': 'image/gif', 'Cache-Control': 'no-store' } });
+        // All attempts failed — return 404 so img onerror fires and shows initials
+        return new Response('Photo not available', { status: 404, headers: { 'Cache-Control': 'no-store' } });
       }
       const ct = upstream.headers.get('Content-Type') || 'image/jpeg';
       return new Response(upstream.body, {

@@ -11,7 +11,7 @@
 //     on every authenticated request via `refreshAuthCookie` wrapper in the
 //     worker entry. If no request arrives within IDLE_TIMEOUT_MS, the cookie
 //     is rejected and the user is forced back to the login page.
-export const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+export const IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 // Parse and verify the auth cookie. Returns { role, username } or null.
 export async function getAuthInfo(req, env) {
