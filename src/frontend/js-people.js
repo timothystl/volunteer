@@ -913,7 +913,7 @@ function uploadPersonPhoto(blob) {
         var photoEl = document.getElementById('pv-photo');
         if (photoEl) {
           var imgEl = document.createElement('img');
-          imgEl.src = d.photo_url + '?t=' + Date.now();
+          imgEl.src = photoSrc(d.photo_url) + '?t=' + Date.now();
           imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;';
           photoEl.innerHTML = '';
           photoEl.appendChild(imgEl);
