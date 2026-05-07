@@ -3,6 +3,27 @@ import { json } from './auth.js';
 import { makeBreezeClient } from './breeze.js';
 import { parseFundSplits, givingEntryId, isGivingDup } from './api-utils.js';
 
+// Cache a Breeze profile photo into our R2 bucket, returning a stable
+// /admin/r2photo/... URL. If R2 isn't configured, the fetch fails, or any
+// step throws, falls back to the original Breeze CDN URL so the existing
+// behavior (link directly to Breeze) is preserved.
+async function ingestBreezePhoto(env, breezeId, breezeUrl) {
+  if (!env.PHOTOS || !breezeUrl || !breezeId) return breezeUrl || '';
+  if (!breezeUrl.includes('breezechms.com')) return breezeUrl;
+  const r2Key = `people/breeze_${breezeId}/photo.jpg`;
+  const proxyUrl = `/admin/r2photo/${r2Key}`;
+  try {
+    const head = await env.PHOTOS.head(r2Key);
+    if (head) return proxyUrl;
+    const res = await fetch(breezeUrl);
+    if (!res.ok) return breezeUrl;
+    const ct = res.headers.get('content-type') || 'image/jpeg';
+    if (!ct.startsWith('image/')) return breezeUrl;
+    await env.PHOTOS.put(r2Key, await res.arrayBuffer(), { httpMetadata: { contentType: ct } });
+    return proxyUrl;
+  } catch { return breezeUrl; }
+}
+
 export async function handleImportApi(req, env, url, method, seg, db, isAdmin, isFinance, isStaff, canEdit) {
 
 // ── Attendance TSV Import ─────────────────────────────────────────
@@ -2368,6 +2389,8 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
              !GENERIC_PAT_PS.some(pat => p.thumb.toLowerCase().includes(pat))) {
     photoUrl = p.thumb;
   }
+  // Cache the Breeze image into R2 so it survives even if Breeze later removes it.
+  if (photoUrl) photoUrl = await ingestBreezePhoto(env, String(p.id), photoUrl);
 
   // Household from p.family — look up by breeze_id only, don't create new from per-person sync
   let familyRole = '', householdId = null;
@@ -2714,6 +2737,7 @@ if (seg === 'import/breeze' && method === 'POST') { try {
                  !GENERIC_PAT.some(pat => p.thumb.toLowerCase().includes(pat))) {
         photoUrl = p.thumb;
       }
+      if (photoUrl) photoUrl = await ingestBreezePhoto(env, String(p.id), photoUrl);
       // Email, phone, address (from typed arrays)
       let email = '', phone = '';
       let addr = { street: '', city: '', state: '', zip: '' };
