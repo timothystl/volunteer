@@ -541,6 +541,8 @@ async function _doInitDb(db) {
     'ALTER TABLE app_users ADD COLUMN people_id INTEGER REFERENCES people(id)',
     // member portal: Web Push subscription JSON (stored per-user account)
     'ALTER TABLE app_users ADD COLUMN push_subscription TEXT NOT NULL DEFAULT ""',
+    // people: once edited locally, bulk Breeze sync will not overwrite name/contact/address/etc.
+    'ALTER TABLE people ADD COLUMN locally_edited INTEGER NOT NULL DEFAULT 0',
   ];
   for (const m of migrations) {
     try { await db.prepare(m).run(); } catch(e) { /* column already exists */ }

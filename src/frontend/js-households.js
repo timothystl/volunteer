@@ -132,7 +132,7 @@ function openHouseholdEdit(h) {
   var upBtn = document.getElementById('hm-photo-upload-btn');
   if (upBtn) upBtn.style.display = isNew ? 'none' : 'inline-flex';
   var applyBtn = document.getElementById('hm-apply-photo-btn');
-  if (applyBtn) applyBtn.style.display = (!isNew && photoUrl) ? 'inline-flex' : 'none';
+  if (applyBtn) applyBtn.style.display = isNew ? 'none' : 'inline-flex';
   document.getElementById('hm-del-btn').style.display = isNew ? 'none' : 'inline-flex';
   document.getElementById('hm-push-addr-row').style.display = isNew ? 'none' : '';
   var mc = document.getElementById('hm-members');
