@@ -131,6 +131,10 @@ function openHouseholdEdit(h) {
   if (prevEl) { prevEl.src = photoUrl ? photoSrc(photoUrl) : ''; prevEl.style.display = photoUrl ? 'block' : 'none'; }
   var upBtn = document.getElementById('hm-photo-upload-btn');
   if (upBtn) upBtn.style.display = isNew ? 'none' : 'inline-flex';
+  var rcBtn = document.getElementById('hm-photo-recrop-btn');
+  if (rcBtn) rcBtn.style.display = (!isNew && photoUrl) ? 'inline-flex' : 'none';
+  var rmBtn = document.getElementById('hm-photo-remove-btn');
+  if (rmBtn) rmBtn.style.display = (!isNew && photoUrl) ? 'inline-flex' : 'none';
   var applyBtn = document.getElementById('hm-apply-photo-btn');
   if (applyBtn) applyBtn.style.display = isNew ? 'none' : 'inline-flex';
   document.getElementById('hm-del-btn').style.display = isNew ? 'none' : 'inline-flex';

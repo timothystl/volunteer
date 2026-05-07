@@ -886,46 +886,67 @@ function handleHHPhotoSelected(input) {
   var file = input.files[0];
   input.value = '';
   if (!file.type.startsWith('image/')) { alert('Please select an image file.'); return; }
-  var hid = _editingHouseholdId;
-  if (!hid) return;
+  if (!_editingHouseholdId) return;
   var reader = new FileReader();
   reader.onload = function(e) {
     var img = new Image();
-    img.onload = function() {
-      var MAX = 600;
-      var w = img.width, h = img.height;
-      if (w > MAX || h > MAX) {
-        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-        else { w = Math.round(w * MAX / h); h = MAX; }
-      }
-      var canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      canvas.toBlob(function(blob) {
-        var btn = document.getElementById('hm-photo-upload-btn');
-        if (btn) { btn.disabled = true; btn.textContent = 'Uploading\u2026'; }
-        var fd = new FormData();
-        fd.append('photo', blob, 'photo.jpg');
-        fetch('/admin/api/households/' + hid + '/photo', { method: 'POST', body: fd, credentials: 'same-origin' })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            if (btn) { btn.disabled = false; btn.innerHTML = '&#128247; Upload Photo'; }
-            if (d && d.ok && d.photo_url) {
-              document.getElementById('hm-photo').value = d.photo_url;
-              var prevEl = document.getElementById('hm-photo-preview');
-              if (prevEl) { prevEl.src = photoSrc(d.photo_url) + '?t=' + Date.now(); prevEl.style.display = 'block'; }
-            } else {
-              alert('Upload failed: ' + ((d && d.error) || 'unknown error'));
-            }
-          }).catch(function() {
-            if (btn) { btn.disabled = false; btn.innerHTML = '&#128247; Upload Photo'; }
-            alert('Upload failed. Please try again.');
-          });
-      }, 'image/jpeg', 0.85);
-    };
+    img.onload = function() { showCropModal(img, uploadHouseholdPhoto); };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+function uploadHouseholdPhoto(blob) {
+  var hid = _editingHouseholdId;
+  if (!hid) return;
+  var btn = document.getElementById('hm-photo-upload-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Uploading…'; }
+  var fd = new FormData();
+  fd.append('photo', blob, 'photo.jpg');
+  fetch('/admin/api/households/' + hid + '/photo', { method: 'POST', body: fd, credentials: 'same-origin' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '&#128247; Upload Photo'; }
+      if (d && d.ok && d.photo_url) {
+        document.getElementById('hm-photo').value = d.photo_url;
+        var prevEl = document.getElementById('hm-photo-preview');
+        if (prevEl) { prevEl.src = photoSrc(d.photo_url) + '?t=' + Date.now(); prevEl.style.display = 'block'; }
+        var rcBtn = document.getElementById('hm-photo-recrop-btn');
+        if (rcBtn) rcBtn.style.display = 'inline-flex';
+        var rmBtn = document.getElementById('hm-photo-remove-btn');
+        if (rmBtn) rmBtn.style.display = 'inline-flex';
+      } else {
+        alert('Upload failed: ' + ((d && d.error) || 'unknown error'));
+      }
+    }).catch(function() {
+      if (btn) { btn.disabled = false; btn.innerHTML = '&#128247; Upload Photo'; }
+      alert('Upload failed. Please try again.');
+    });
+}
+function recropHHPhoto() {
+  var url = document.getElementById('hm-photo').value;
+  if (!url) return;
+  var img = new Image();
+  img.onload = function() { showCropModal(img, uploadHouseholdPhoto); };
+  img.onerror = function() { alert('Could not load the current household photo for re-cropping.'); };
+  img.src = photoSrc(url);
+}
+function removeHHPhoto() {
+  var hid = _editingHouseholdId;
+  if (!hid) return;
+  if (!confirm('Remove this household photo?')) return;
+  fetch('/admin/api/households/' + hid + '/photo', { method: 'DELETE', credentials: 'same-origin' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d || !d.ok) { alert('Remove failed: ' + ((d && d.error) || 'unknown error')); return; }
+      document.getElementById('hm-photo').value = '';
+      var prevEl = document.getElementById('hm-photo-preview');
+      if (prevEl) { prevEl.src = ''; prevEl.style.display = 'none'; }
+      var rcBtn = document.getElementById('hm-photo-recrop-btn');
+      if (rcBtn) rcBtn.style.display = 'none';
+      var rmBtn = document.getElementById('hm-photo-remove-btn');
+      if (rmBtn) rmBtn.style.display = 'none';
+    })
+    .catch(function() { alert('Remove failed. Please try again.'); });
 }
 
 function handlePhotoFileSelected(input) {

@@ -1001,6 +1001,8 @@ export const HTML_TABS_2 = String.raw`
       <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
         <img id="hm-photo-preview" src="" alt="" style="display:none;width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border);">
         <button type="button" id="hm-photo-upload-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="triggerHHPhotoUpload()">&#128247; Upload Photo</button>
+        <button type="button" id="hm-photo-recrop-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="recropHHPhoto()">&#9986; Re-crop</button>
+        <button type="button" id="hm-photo-remove-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;color:var(--clay-red);" onclick="removeHHPhoto()">&times; Remove</button>
         <button type="button" id="hm-apply-photo-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="applyHHPhotoToMembers()">&#128247; Apply to Family</button>
         <input type="file" id="hm-photo-input" accept="image/*" style="display:none;" onchange="handleHHPhotoSelected(this)">
       </div>

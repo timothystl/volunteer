@@ -615,6 +615,20 @@ if (hhPhotoMatch && method === 'POST') {
   await db.prepare('UPDATE households SET photo_url=? WHERE id=?').bind(photoUrl, hid).run();
   return json({ ok: true, photo_url: photoUrl });
 }
+// Remove a household's photo (DB clear + R2 delete)
+if (hhPhotoMatch && method === 'DELETE') {
+  if (!canEdit) return json({ error: 'Access denied' }, 403);
+  const hid = parseInt(hhPhotoMatch[1]);
+  const row = await db.prepare('SELECT photo_url FROM households WHERE id=?').bind(hid).first();
+  if (!row) return json({ error: 'Household not found' }, 404);
+  await db.prepare('UPDATE households SET photo_url=? WHERE id=?').bind('', hid).run();
+  if (env.PHOTOS) {
+    for (const k of [`households/${hid}/photo.jpg`, `households/${hid}/photo.png`, `households/${hid}/photo.webp`]) {
+      try { await env.PHOTOS.delete(k); } catch {}
+    }
+  }
+  return json({ ok: true });
+}
 
 // ── Households / Organizations / Tags / Funds → api-households.js ──
 if (seg.startsWith('households') || seg.startsWith('organizations') ||
