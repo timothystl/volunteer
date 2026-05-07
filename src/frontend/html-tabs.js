@@ -687,6 +687,7 @@ export const HTML_TABS_2 = String.raw`
           <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="white" stroke-width="1.8"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </div>
         <button type="button" id="pv-photo-remove-btn" class="require-edit" onclick="removePersonPhoto()" title="Remove photo" style="display:none;position:absolute;top:-4px;right:-4px;width:22px;height:22px;border-radius:50%;border:none;background:var(--clay-red);color:white;font-size:14px;line-height:1;cursor:pointer;padding:0;box-shadow:0 1px 3px rgba(0,0,0,.3);">&times;</button>
+        <button type="button" id="pv-photo-recrop-btn" class="require-edit" onclick="recropPersonPhoto()" title="Re-crop current photo" style="display:none;position:absolute;top:-4px;left:-4px;width:22px;height:22px;border-radius:50%;border:none;background:var(--steel-anchor);color:white;font-size:12px;line-height:1;cursor:pointer;padding:0;box-shadow:0 1px 3px rgba(0,0,0,.3);">&#9986;</button>
       </div>
       <input type="file" id="pv-photo-input" accept="image/*" style="display:none;" onchange="handlePhotoFileSelected(this)">
       <div class="pv-hdr-info">
@@ -1000,6 +1001,9 @@ export const HTML_TABS_2 = String.raw`
       <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
         <img id="hm-photo-preview" src="" alt="" style="display:none;width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border);">
         <button type="button" id="hm-photo-upload-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="triggerHHPhotoUpload()">&#128247; Upload Photo</button>
+        <button type="button" id="hm-photo-pick-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="openHHPhotoPicker()">&#128100; Use Member's Photo</button>
+        <button type="button" id="hm-photo-recrop-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="recropHHPhoto()">&#9986; Re-crop</button>
+        <button type="button" id="hm-photo-remove-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;color:var(--clay-red);" onclick="removeHHPhoto()">&times; Remove</button>
         <button type="button" id="hm-apply-photo-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="applyHHPhotoToMembers()">&#128247; Apply to Family</button>
         <input type="file" id="hm-photo-input" accept="image/*" style="display:none;" onchange="handleHHPhotoSelected(this)">
       </div>
@@ -1180,6 +1184,14 @@ export const HTML_TABS_2 = String.raw`
       <button class="btn-primary" onclick="addMemberType()">Add</button>
     </div>
     <div class="modal-actions"><button class="btn-secondary" onclick="closeModal('member-types-modal')">Close</button></div>
+  </div>
+</div>
+<div class="modal-overlay" id="hh-photo-pick-modal" onclick="if(event.target===this)closeModal('hh-photo-pick-modal')">
+  <div class="modal" style="max-width:520px;">
+    <h2 style="margin-bottom:6px;">Use a Member's Photo</h2>
+    <div style="font-size:.82rem;color:var(--warm-gray);margin-bottom:12px;">Choose a household member whose profile photo should become the household photo.</div>
+    <div id="hh-photo-pick-list" style="display:flex;flex-wrap:wrap;gap:10px;max-height:50vh;overflow-y:auto;"></div>
+    <div class="modal-actions"><button class="btn-secondary" onclick="closeModal('hh-photo-pick-modal')">Cancel</button></div>
   </div>
 </div>
 <div class="modal-overlay" id="add-to-hh-modal" onclick="if(event.target===this)closeModal('add-to-hh-modal')">

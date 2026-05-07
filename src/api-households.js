@@ -62,7 +62,7 @@ export async function handleHouseholdsApi(req, env, url, method, seg, db, isAdmi
       const h = await db.prepare('SELECT * FROM households WHERE id=?').bind(hid).first();
       if (!h) return json({ error: 'Not found' }, 404);
       const members = (await db.prepare(
-        `SELECT id,first_name,last_name,member_type,family_role,phone,email FROM people WHERE household_id=? AND active=1 ORDER BY family_role,last_name`
+        `SELECT id,first_name,last_name,member_type,family_role,phone,email,photo_url FROM people WHERE household_id=? AND active=1 ORDER BY family_role,last_name`
       ).bind(hid).all()).results || [];
       // HQ4: compute display_name if another household shares this name
       let display_name = h.name;
@@ -145,6 +145,23 @@ export async function handleHouseholdsApi(req, env, url, method, seg, db, isAdmi
        WHERE household_id=? AND active=1 AND (COALESCE(address1,'')='')`
     ).bind(b.address1||'',b.city||'',b.state||'MO',b.zip||'',hid).run();
     return json({ ok: true, updated: r.meta?.changes ?? 0 });
+  }
+
+  // ── Copy a household member's photo into the household record ─────
+  const hhUseMember = seg.match(/^households\/(\d+)\/use-member-photo$/);
+  if (hhUseMember && method === 'POST') {
+    if (!canEdit) return json({ error: 'Access denied' }, 403);
+    const hid = parseInt(hhUseMember[1]);
+    let b = {}; try { b = await req.json(); } catch {}
+    const memberId = parseInt(b.member_id || 0);
+    if (!memberId) return json({ error: 'member_id required' }, 400);
+    const m = await db.prepare(
+      'SELECT photo_url FROM people WHERE id=? AND household_id=? AND active=1'
+    ).bind(memberId, hid).first();
+    if (!m) return json({ error: 'Member not found in this household' }, 404);
+    if (!m.photo_url) return json({ error: 'That member has no photo' }, 400);
+    await db.prepare('UPDATE households SET photo_url=? WHERE id=?').bind(m.photo_url, hid).run();
+    return json({ ok: true, photo_url: m.photo_url });
   }
 
   // ── Apply household photo to members (per-household) ─────────────
