@@ -1118,11 +1118,20 @@ function cropMouseMove(e) {
     r.x = Math.max(0, Math.min(iw - r.w, r.x + dx));
     r.y = Math.max(0, Math.min(ih - r.h, r.y + dy));
   } else {
-    var d = (Math.abs(dx) > Math.abs(dy)) ? dx : dy;
-    if (_cropDrag.type === 'tl') { var nw=Math.max(MIN,r.w-d),nh=Math.max(MIN,r.h-d); r.x=r.x+(r.w-nw); r.y=r.y+(r.h-nh); r.w=nw; r.h=nh; }
-    else if (_cropDrag.type === 'tr') { var nw=Math.max(MIN,r.w+d),nh=Math.max(MIN,r.h+d); r.w=nw; r.y=r.y+(r.h-nh); r.h=nh; }
-    else if (_cropDrag.type === 'bl') { var nw=Math.max(MIN,r.w-d),nh=Math.max(MIN,r.h+d); r.x=r.x+(r.w-nw); r.w=nw; r.h=nh; }
-    else if (_cropDrag.type === 'br') { var nw=Math.max(MIN,r.w+d),nh=Math.max(MIN,r.h+d); r.w=nw; r.h=nh; }
+    // Free aspect ratio: each corner moves x/y independently.
+    if (_cropDrag.type === 'tl') {
+      var nw = Math.max(MIN, r.w - dx), nh = Math.max(MIN, r.h - dy);
+      r.x = r.x + (r.w - nw); r.y = r.y + (r.h - nh); r.w = nw; r.h = nh;
+    } else if (_cropDrag.type === 'tr') {
+      var nw = Math.max(MIN, r.w + dx), nh = Math.max(MIN, r.h - dy);
+      r.y = r.y + (r.h - nh); r.w = nw; r.h = nh;
+    } else if (_cropDrag.type === 'bl') {
+      var nw = Math.max(MIN, r.w - dx), nh = Math.max(MIN, r.h + dy);
+      r.x = r.x + (r.w - nw); r.w = nw; r.h = nh;
+    } else if (_cropDrag.type === 'br') {
+      var nw = Math.max(MIN, r.w + dx), nh = Math.max(MIN, r.h + dy);
+      r.w = nw; r.h = nh;
+    }
     r.x = Math.max(0, Math.min(iw - r.w, r.x));
     r.y = Math.max(0, Math.min(ih - r.h, r.y));
     r.w = Math.min(r.w, iw - r.x);
