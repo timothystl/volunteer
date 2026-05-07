@@ -1090,16 +1090,23 @@ export const HTML_TABS_2 = String.raw`
   </div>
 </div>
 <div class="modal-overlay" id="crop-modal">
-  <div class="modal" style="max-width:600px;padding:20px;">
+  <div class="modal" style="max-width:640px;padding:20px;">
     <h2 style="margin-bottom:12px;">Crop Profile Photo</h2>
-    <div style="text-align:center;background:#222;border-radius:8px;overflow:hidden;line-height:0;user-select:none;">
-      <canvas id="crop-canvas" style="max-width:100%;cursor:crosshair;touch-action:none;"
+    <div id="crop-canvas-wrap" style="text-align:center;background:#222;border-radius:8px;overflow:auto;max-height:60vh;line-height:0;user-select:none;">
+      <canvas id="crop-canvas" style="cursor:crosshair;touch-action:none;display:inline-block;"
         onmousedown="cropMouseDown(event)"
         onmousemove="cropMouseMove(event)"
         onmouseup="cropMouseUp(event)"
         onmouseleave="cropMouseUp(event)"></canvas>
     </div>
-    <div style="font-size:.8rem;color:var(--warm-gray);margin-top:8px;text-align:center;">Drag box to reposition · Drag corners to resize</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;justify-content:center;">
+      <span style="font-size:.82rem;color:var(--warm-gray);">Zoom</span>
+      <button type="button" class="btn-secondary" style="font-size:.82rem;padding:3px 10px;" onclick="cropZoom(-1)">−</button>
+      <input type="range" id="crop-zoom" min="100" max="500" step="10" value="100" oninput="cropZoomSlider(this.value)" style="flex:0 1 200px;">
+      <button type="button" class="btn-secondary" style="font-size:.82rem;padding:3px 10px;" onclick="cropZoom(1)">+</button>
+      <span id="crop-zoom-label" style="font-size:.82rem;color:var(--warm-gray);min-width:42px;text-align:right;">100%</span>
+    </div>
+    <div style="font-size:.8rem;color:var(--warm-gray);margin-top:6px;text-align:center;">Drag box to reposition · Drag corners to resize · Zoom in for tighter crop</div>
     <div class="modal-actions">
       <button class="btn-primary" onclick="cropApply()">Crop &amp; Upload</button>
       <button class="btn-secondary" onclick="cropSkip()">Use Full Image</button>

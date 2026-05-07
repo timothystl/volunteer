@@ -989,18 +989,43 @@ function uploadPersonPhoto(blob) {
 }
 
 // ── CROP MODAL ────────────────────────────────────────────────────────
+var _cropFitScale = 1, _cropZoom = 1;
 function showCropModal(img, callback) {
   _cropImg = img;
   _cropCallback = callback;
-  var MAX_W = 540, MAX_H = 380;
-  _cropScale = Math.min(1, MAX_W / img.width, MAX_H / img.height);
+  var MAX_W = 600, MAX_H = 440;
+  _cropFitScale = Math.min(1, MAX_W / img.width, MAX_H / img.height);
+  _cropZoom = 1;
+  _cropScale = _cropFitScale * _cropZoom;
   var canvas = document.getElementById('crop-canvas');
   canvas.width = Math.round(img.width * _cropScale);
   canvas.height = Math.round(img.height * _cropScale);
   var dim = Math.min(img.width, img.height);
   _cropRect = { x: Math.round((img.width - dim) / 2), y: Math.round((img.height - dim) / 2), w: dim, h: dim };
+  var slider = document.getElementById('crop-zoom');
+  if (slider) slider.value = 100;
+  var lbl = document.getElementById('crop-zoom-label');
+  if (lbl) lbl.textContent = '100%';
   _cropDraw();
   openModal('crop-modal');
+}
+function cropZoomSlider(val) {
+  _cropZoom = Math.max(1, parseInt(val) / 100);
+  _cropScale = _cropFitScale * _cropZoom;
+  var canvas = document.getElementById('crop-canvas');
+  canvas.width = Math.round(_cropImg.width * _cropScale);
+  canvas.height = Math.round(_cropImg.height * _cropScale);
+  var lbl = document.getElementById('crop-zoom-label');
+  if (lbl) lbl.textContent = Math.round(_cropZoom * 100) + '%';
+  _cropDraw();
+}
+function cropZoom(dir) {
+  var slider = document.getElementById('crop-zoom');
+  if (!slider) return;
+  var step = 25;
+  var v = Math.max(100, Math.min(500, parseInt(slider.value) + dir * step));
+  slider.value = v;
+  cropZoomSlider(v);
 }
 function _cropDraw() {
   var canvas = document.getElementById('crop-canvas');
@@ -1052,7 +1077,9 @@ function cropMouseMove(e) {
   var dx = (mx - _cropDrag.sx) / s, dy = (my - _cropDrag.sy) / s;
   var iw = _cropImg.width, ih = _cropImg.height;
   var r = {x: _cropDrag.rx, y: _cropDrag.ry, w: _cropDrag.rw, h: _cropDrag.rh};
-  var MIN = 40;
+  // Keep handles grabbable at every zoom: minimum is whichever is larger of
+  // 20 source-image pixels or 30 displayed canvas pixels back-projected.
+  var MIN = Math.max(20, 30 / _cropScale);
   if (_cropDrag.type === 'move') {
     r.x = Math.max(0, Math.min(iw - r.w, r.x + dx));
     r.y = Math.max(0, Math.min(ih - r.h, r.y + dy));
