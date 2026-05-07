@@ -150,14 +150,27 @@ export async function handleHouseholdsApi(req, env, url, method, seg, db, isAdmi
   // ── Apply household photo to members (per-household) ─────────────
   // Mirror of sync-address: only members with NO photo get the household photo,
   // never clobbering an individual's manual-upload or Breeze-synced photo.
+  // Smart fallback: if the household has no photo but its head does, the
+  // head's photo is promoted to the household first, then cascaded.
   const hhApplyPhoto = seg.match(/^households\/(\d+)\/apply-photo-to-members$/);
   if (hhApplyPhoto && method === 'POST') {
     if (!canEdit) return json({ error: 'Access denied' }, 403);
     const hid = parseInt(hhApplyPhoto[1]);
     const hh = await db.prepare('SELECT photo_url FROM households WHERE id=?').bind(hid).first();
     if (!hh) return json({ error: 'Household not found' }, 404);
-    const photoUrl = hh.photo_url || '';
-    if (!photoUrl) return json({ ok: false, error: 'Household has no photo' }, 400);
+    let photoUrl = hh.photo_url || '';
+    if (!photoUrl) {
+      const head = await db.prepare(
+        `SELECT photo_url FROM people
+         WHERE household_id=? AND family_role='head' AND active=1
+           AND COALESCE(photo_url,'') != '' LIMIT 1`
+      ).bind(hid).first();
+      if (head && head.photo_url) {
+        photoUrl = head.photo_url;
+        await db.prepare('UPDATE households SET photo_url=? WHERE id=?').bind(photoUrl, hid).run();
+      }
+    }
+    if (!photoUrl) return json({ ok: false, error: 'No photo on household or head of household' }, 400);
     const r = await db.prepare(
       `UPDATE people SET photo_url=?
        WHERE household_id=? AND active=1 AND COALESCE(photo_url,'')=''`
@@ -166,10 +179,27 @@ export async function handleHouseholdsApi(req, env, url, method, seg, db, isAdmi
   }
 
   // ── Apply household photo to members (all households, admin) ─────
-  // Single statement: every active member with no photo whose household
-  // has one inherits it. Members with existing photos are skipped.
+  // Two-pass: (1) backfill household.photo_url from head's photo where the
+  // household has none, then (2) cascade to members with empty photo_url.
   if (seg === 'households/apply-photo-to-members-all' && method === 'POST') {
     if (!isAdmin) return json({ error: 'Admin only' }, 403);
+    await db.prepare(
+      `UPDATE households
+         SET photo_url = (
+           SELECT photo_url FROM people
+            WHERE household_id = households.id
+              AND family_role='head' AND active=1
+              AND COALESCE(photo_url,'') != ''
+            LIMIT 1
+         )
+       WHERE COALESCE(photo_url,'') = ''
+         AND EXISTS (
+           SELECT 1 FROM people
+            WHERE household_id = households.id
+              AND family_role='head' AND active=1
+              AND COALESCE(photo_url,'') != ''
+         )`
+    ).run();
     const r = await db.prepare(
       `UPDATE people
          SET photo_url = (SELECT h.photo_url FROM households h WHERE h.id = people.household_id)

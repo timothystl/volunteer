@@ -2523,7 +2523,8 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
                          END,
      deceased          = CASE WHEN ? = 1 THEN 1 ELSE deceased            END,
      death_date        = CASE WHEN ? != '' THEN ? ELSE death_date        END,
-     envelope_number   = CASE WHEN ? != '' THEN ? ELSE envelope_number   END
+     envelope_number   = CASE WHEN ? != '' THEN ? ELSE envelope_number   END,
+     locally_edited    = 0
      WHERE breeze_id=?`
   ).bind(
     fn,fn, ln,ln, email,email, phone,phone,
@@ -2818,7 +2819,11 @@ if (seg === 'import/breeze' && method === 'POST') { try {
                  !GENERIC_PAT.some(pat => p.thumb.toLowerCase().includes(pat))) {
         photoUrl = p.thumb;
       }
-      if (photoUrl) photoUrl = await ingestBreezePhoto(env, String(p.id), photoUrl);
+      // Bulk path: do NOT ingest into R2 here — adds ~3 subrequests/person and
+      // tens of seconds of wall-clock to a 100-person batch, blowing past
+      // Cloudflare's connection budget. Frontend routes these URLs through
+      // /admin/photo-proxy, which works against files.breezechms.com without
+      // auth. R2 caching is still done in the per-person sync path.
       // Email, phone, address (from typed arrays)
       let email = '', phone = '';
       let addr = { street: '', city: '', state: '', zip: '' };
@@ -2876,25 +2881,40 @@ if (seg === 'import/breeze' && method === 'POST') { try {
         // Use COALESCE(NULLIF(newVal,''),existingCol) for date + photo fields so that
         // manually-entered data and any values Breeze doesn't return are never wiped.
         // Contact/name/member fields are always overwritten (Breeze is authoritative for those).
+        // Once a person is edited locally, name + contact + address + member_type +
+        // demographic dates + gender + marital + envelope are owned by the app and not
+        // overwritten by sync. Breeze still authoritatively updates household linkage,
+        // family_role, deceased flag, baptized/confirmed flags, and photos.
+        // CASE ... WHEN locally_edited=1 THEN <existing> ELSE <new> END accomplishes
+        // this in a single UPDATE without a SELECT roundtrip.
         await db.prepare(
-          `UPDATE people SET first_name=?,last_name=?,email=?,phone=?,
-           address1=?,city=?,state=?,zip=?,member_type=?,household_id=?,
-           dob=COALESCE(NULLIF(?,''),dob),
-           baptism_date=COALESCE(NULLIF(?,''),baptism_date),
+          `UPDATE people SET
+           first_name        = CASE WHEN locally_edited=1 THEN first_name        ELSE ? END,
+           last_name         = CASE WHEN locally_edited=1 THEN last_name         ELSE ? END,
+           email             = CASE WHEN locally_edited=1 THEN email             ELSE ? END,
+           phone             = CASE WHEN locally_edited=1 THEN phone             ELSE ? END,
+           address1          = CASE WHEN locally_edited=1 THEN address1          ELSE ? END,
+           city              = CASE WHEN locally_edited=1 THEN city              ELSE ? END,
+           state             = CASE WHEN locally_edited=1 THEN state             ELSE ? END,
+           zip               = CASE WHEN locally_edited=1 THEN zip               ELSE ? END,
+           member_type       = CASE WHEN locally_edited=1 THEN member_type       ELSE ? END,
+           household_id=?,
+           dob               = CASE WHEN locally_edited=1 THEN dob               ELSE COALESCE(NULLIF(?,''),dob) END,
+           baptism_date      = CASE WHEN locally_edited=1 THEN baptism_date      ELSE COALESCE(NULLIF(?,''),baptism_date) END,
            baptized=CASE WHEN ?!='' THEN 1 ELSE baptized END,
-           confirmation_date=COALESCE(NULLIF(?,''),confirmation_date),
+           confirmation_date = CASE WHEN locally_edited=1 THEN confirmation_date ELSE COALESCE(NULLIF(?,''),confirmation_date) END,
            confirmed=CASE WHEN ?!='' THEN 1 ELSE confirmed END,
-           anniversary_date=COALESCE(NULLIF(?,''),anniversary_date),
+           anniversary_date  = CASE WHEN locally_edited=1 THEN anniversary_date  ELSE COALESCE(NULLIF(?,''),anniversary_date) END,
            family_role=?,
            photo_url=CASE
                        WHEN photo_url LIKE '/admin/r2photo/%' THEN photo_url
                        ELSE COALESCE(NULLIF(?,''),photo_url)
                      END,
-           gender=COALESCE(NULLIF(?,''),gender),
-           marital_status=COALESCE(NULLIF(?,''),marital_status),
+           gender            = CASE WHEN locally_edited=1 THEN gender            ELSE COALESCE(NULLIF(?,''),gender) END,
+           marital_status    = CASE WHEN locally_edited=1 THEN marital_status    ELSE COALESCE(NULLIF(?,''),marital_status) END,
            deceased=CASE WHEN ?=1 THEN 1 ELSE deceased END,
-           death_date=COALESCE(NULLIF(?,''),death_date),
-           envelope_number=COALESCE(NULLIF(?,''),envelope_number),
+           death_date        = CASE WHEN locally_edited=1 THEN death_date        ELSE COALESCE(NULLIF(?,''),death_date) END,
+           envelope_number   = CASE WHEN locally_edited=1 THEN envelope_number   ELSE COALESCE(NULLIF(?,''),envelope_number) END,
            active=1
            WHERE breeze_id=?`
         ).bind(fn,ln,email,phone,addr.street,addr.city,addr.state,addr.zip,memberType,householdId,

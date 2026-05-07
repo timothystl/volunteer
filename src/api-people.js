@@ -300,7 +300,7 @@ if (pmatch) {
        anniversary_date=?,death_date=?,deceased=?,household_id=?,family_role=?,photo_url=?,notes=?,
        public_directory=?,envelope_number=?,last_seen_date=?,gender=?,marital_status=?,
        dir_hide_address=?,dir_hide_phone=?,dir_hide_email=?,dir_hide_dob=?,dir_hide_anniversary=?,
-       baptized=?,confirmed=?,sms_opt_in=? WHERE id=?`
+       baptized=?,confirmed=?,sms_opt_in=?,locally_edited=1 WHERE id=?`
     ).bind(b.first_name||'',b.last_name||'',b.email||'',normalizePhone(b.phone||''),
            b.address1||'',b.address2||'',b.city||'',b.state||'MO',b.zip||'',
            b.member_type||'visitor',b.dob||'',b.baptism_date||'',
