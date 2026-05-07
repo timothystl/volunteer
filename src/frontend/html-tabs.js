@@ -502,6 +502,12 @@ export const HTML_TABS_1 = String.raw`<!-- ═══ HOME / DASHBOARD TAB ══
       <button class="btn-secondary" onclick="fixHouseholdHeads()" style="font-size:.88rem;">Fix Household Heads</button>
       <div class="import-status" id="hq4-status"></div>
     </div>
+    <div class="import-card require-admin">
+      <h3>&#127911; Cascade Household Photos</h3>
+      <p>Copy each household's photo to its members who currently have no photo. Members with their own profile picture are never overwritten. Run after uploading new household photos or after a Breeze sync.</p>
+      <button class="btn-secondary" onclick="applyAllHouseholdPhotos()" style="font-size:.88rem;">Apply Household Photos</button>
+      <div class="import-status" id="cascade-photos-status"></div>
+    </div>
     <div class="import-card role-admin">
       <h3>&#128222; Normalize Phone Numbers</h3>
       <p>Reformats all phone numbers in the database to <strong>(XXX) XXX-XXXX</strong>. Safe to run multiple times — unchanged numbers are skipped. Run once after migrating data from Breeze or another source.</p>
@@ -971,6 +977,7 @@ export const HTML_TABS_2 = String.raw`
       <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
         <img id="hm-photo-preview" src="" alt="" style="display:none;width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border);">
         <button type="button" id="hm-photo-upload-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="triggerHHPhotoUpload()">&#128247; Upload Photo</button>
+        <button type="button" id="hm-apply-photo-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="applyHHPhotoToMembers()">&#128247; Apply to Family</button>
         <input type="file" id="hm-photo-input" accept="image/*" style="display:none;" onchange="handleHHPhotoSelected(this)">
       </div>
     </div>
