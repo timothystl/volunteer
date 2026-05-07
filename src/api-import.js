@@ -4,9 +4,11 @@ import { makeBreezeClient } from './breeze.js';
 import { parseFundSplits, givingEntryId, isGivingDup } from './api-utils.js';
 
 // Cache a Breeze profile photo into our R2 bucket, returning a stable
-// /admin/r2photo/... URL. If R2 isn't configured, the fetch fails, or any
-// step throws, falls back to the original Breeze CDN URL so the existing
-// behavior (link directly to Breeze) is preserved.
+// /admin/r2photo/... URL. Mirrors the auth fallbacks in the /admin/photo-proxy
+// route — Breeze's CDN often needs the API key (header or query param) and
+// will otherwise return an HTML login page that masquerades as 200 OK.
+// If R2 isn't configured or every attempt fails, falls back to the original
+// Breeze URL so the existing display behavior is preserved.
 async function ingestBreezePhoto(env, breezeId, breezeUrl) {
   if (!env.PHOTOS || !breezeUrl || !breezeId) return breezeUrl || '';
   if (!breezeUrl.includes('breezechms.com')) return breezeUrl;
@@ -15,12 +17,21 @@ async function ingestBreezePhoto(env, breezeId, breezeUrl) {
   try {
     const head = await env.PHOTOS.head(r2Key);
     if (head) return proxyUrl;
-    const res = await fetch(breezeUrl);
-    if (!res.ok) return breezeUrl;
-    const ct = res.headers.get('content-type') || 'image/jpeg';
-    if (!ct.startsWith('image/')) return breezeUrl;
-    await env.PHOTOS.put(r2Key, await res.arrayBuffer(), { httpMetadata: { contentType: ct } });
-    return proxyUrl;
+    const apiKey = env.BREEZE_API_KEY || '';
+    const attempts = [
+      () => fetch(breezeUrl),
+      () => apiKey ? fetch(breezeUrl, { headers: { 'Api-key': apiKey } }) : null,
+      () => apiKey ? fetch(breezeUrl + (breezeUrl.includes('?') ? '&' : '?') + 'api_key=' + encodeURIComponent(apiKey)) : null,
+    ];
+    for (const attempt of attempts) {
+      const res = attempt ? await attempt().catch(() => null) : null;
+      if (!res || !res.ok) continue;
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.startsWith('image/')) continue; // skip HTML login pages
+      await env.PHOTOS.put(r2Key, await res.arrayBuffer(), { httpMetadata: { contentType: ct } });
+      return proxyUrl;
+    }
+    return breezeUrl;
   } catch { return breezeUrl; }
 }
 
@@ -2173,6 +2184,72 @@ if (seg === 'import/breeze-sync-tags' && method === 'POST') { try {
   return json({ ok: false, error: 'Tag sync error: ' + e.message }, 500);
 } }
 
+// ── Breeze photo accessibility diagnostic ────────────────────────
+// Given a Breeze person ID, fetches their record, extracts the photo path,
+// and tries each auth strategy. Reports per-attempt status, content-type,
+// and content-length so we can determine whether the API key is sufficient
+// for Breeze's CDN at all. Admin-only.
+if (seg === 'import/breeze-photo-test' && method === 'POST') { try {
+  if (!isAdmin) return json({ error: 'Admin only' }, 403);
+  const breeze = makeBreezeClient(env);
+  if (!breeze) return json({ error: 'Breeze not configured' }, 503);
+  let body = {}; try { body = await req.json(); } catch {}
+  const breezeId = String(body.breeze_id || '').trim();
+  if (!breezeId) return json({ error: 'breeze_id required' }, 400);
+  const personRes = await breeze.person(breezeId);
+  if (!personRes.ok) return json({ error: 'Breeze person fetch failed: ' + personRes.status }, 502);
+  let raw; try { raw = await personRes.json(); } catch { return json({ error: 'Invalid JSON from Breeze' }, 502); }
+  const p = Array.isArray(raw) ? raw[0] : (raw && raw.person ? raw.person : raw);
+  if (!p) return json({ error: 'Person not found' }, 404);
+  const subdomain = breeze.subdomain;
+  const path = p.path || p.photo || '';
+  const thumb = p.thumb || '';
+  const candidates = [];
+  if (path) {
+    candidates.push({ label: 'path via subdomain', url: `https://${subdomain}.breezechms.com/${String(path).replace(/^\/+/, '')}` });
+    candidates.push({ label: 'path via files.breezechms.com', url: `https://files.breezechms.com/${String(path).replace(/^\/+/, '')}` });
+  }
+  if (thumb) {
+    candidates.push({ label: 'thumb (as-is)', url: thumb });
+  }
+  const apiKey = env.BREEZE_API_KEY || '';
+  const strategies = [
+    { name: 'no-auth',         build: (u) => fetch(u) },
+    { name: 'header Api-key',  build: (u) => fetch(u, { headers: { 'Api-key': apiKey } }) },
+    { name: 'query api_key',   build: (u) => fetch(u + (u.includes('?') ? '&' : '?') + 'api_key=' + encodeURIComponent(apiKey)) },
+  ];
+  const results = [];
+  for (const c of candidates) {
+    for (const s of strategies) {
+      try {
+        const r = await s.build(c.url);
+        results.push({
+          url: c.url,
+          label: c.label,
+          strategy: s.name,
+          status: r.status,
+          ok: r.ok,
+          content_type: r.headers.get('content-type') || '',
+          content_length: r.headers.get('content-length') || '',
+          is_image: (r.headers.get('content-type') || '').startsWith('image/'),
+        });
+      } catch (e) {
+        results.push({ url: c.url, label: c.label, strategy: s.name, error: e.message });
+      }
+    }
+  }
+  return json({
+    ok: true,
+    breeze_id: breezeId,
+    person: { id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' '), path, thumb },
+    candidates,
+    results,
+    advice: results.some(r => r.is_image)
+      ? 'At least one URL+strategy returns an image. ingestBreezePhoto should work.'
+      : 'No combination returned an image — Breeze profile photos likely require session-cookie auth, not the API key. Photos cannot be programmatically imported.',
+  });
+} catch (e) { return json({ error: 'Diagnostic error: ' + e.message }, 500); } }
+
 // ── Breeze Per-Person Sync ───────────────────────────────────────
 // Forces a demographic re-sync for a single person identified by their Breeze ID.
 // Returns detailed diagnostics: which profile fields matched, raw Breeze values,
@@ -2439,7 +2516,11 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
      anniversary_date  = CASE WHEN ? != '' THEN ? ELSE anniversary_date  END,
      gender            = CASE WHEN ? != '' THEN ? ELSE gender            END,
      marital_status    = CASE WHEN ? != '' THEN ? ELSE marital_status    END,
-     photo_url         = CASE WHEN ? != '' THEN ? ELSE photo_url         END,
+     photo_url         = CASE
+                           WHEN photo_url LIKE '/admin/r2photo/%' THEN photo_url
+                           WHEN ? != '' THEN ?
+                           ELSE photo_url
+                         END,
      deceased          = CASE WHEN ? = 1 THEN 1 ELSE deceased            END,
      death_date        = CASE WHEN ? != '' THEN ? ELSE death_date        END,
      envelope_number   = CASE WHEN ? != '' THEN ? ELSE envelope_number   END
@@ -2805,7 +2886,10 @@ if (seg === 'import/breeze' && method === 'POST') { try {
            confirmed=CASE WHEN ?!='' THEN 1 ELSE confirmed END,
            anniversary_date=COALESCE(NULLIF(?,''),anniversary_date),
            family_role=?,
-           photo_url=COALESCE(NULLIF(?,''),photo_url),
+           photo_url=CASE
+                       WHEN photo_url LIKE '/admin/r2photo/%' THEN photo_url
+                       ELSE COALESCE(NULLIF(?,''),photo_url)
+                     END,
            gender=COALESCE(NULLIF(?,''),gender),
            marital_status=COALESCE(NULLIF(?,''),marital_status),
            deceased=CASE WHEN ?=1 THEN 1 ELSE deceased END,
