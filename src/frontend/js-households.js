@@ -131,12 +131,16 @@ function openHouseholdEdit(h) {
   if (prevEl) { prevEl.src = photoUrl ? photoSrc(photoUrl) : ''; prevEl.style.display = photoUrl ? 'block' : 'none'; }
   var upBtn = document.getElementById('hm-photo-upload-btn');
   if (upBtn) upBtn.style.display = isNew ? 'none' : 'inline-flex';
+  var pickBtn = document.getElementById('hm-photo-pick-btn');
+  if (pickBtn) pickBtn.style.display = isNew ? 'none' : 'inline-flex';
   var rcBtn = document.getElementById('hm-photo-recrop-btn');
   if (rcBtn) rcBtn.style.display = (!isNew && photoUrl) ? 'inline-flex' : 'none';
   var rmBtn = document.getElementById('hm-photo-remove-btn');
   if (rmBtn) rmBtn.style.display = (!isNew && photoUrl) ? 'inline-flex' : 'none';
   var applyBtn = document.getElementById('hm-apply-photo-btn');
   if (applyBtn) applyBtn.style.display = isNew ? 'none' : 'inline-flex';
+  // Stash members with photos so the picker can render without a refetch
+  _hhEditMembers = (h && h.members) ? h.members : [];
   document.getElementById('hm-del-btn').style.display = isNew ? 'none' : 'inline-flex';
   document.getElementById('hm-push-addr-row').style.display = isNew ? 'none' : '';
   var mc = document.getElementById('hm-members');
@@ -198,6 +202,51 @@ function hhPushAddress() {
     var n = r.updated || 0;
     if (n > 0) alert('Address pushed to ' + n + ' member' + (n !== 1 ? 's' : '') + ' who had no address on file.');
     else alert('All household members already have an address — nothing was changed.');
+  });
+}
+var _hhEditMembers = [];
+function openHHPhotoPicker() {
+  var hid = _editingHouseholdId;
+  if (!hid) return;
+  var members = _hhEditMembers || [];
+  var withPhotos = members.filter(function(m){ return m.photo_url; });
+  if (!withPhotos.length) {
+    alert('No household members have a photo on their profile yet. Upload a profile photo to a member, or use the Upload Photo button to set the household photo directly.');
+    return;
+  }
+  // Sort head first, then by last+first
+  withPhotos.sort(function(a, b) {
+    var ha = a.family_role === 'head' ? 0 : 1, hb = b.family_role === 'head' ? 0 : 1;
+    if (ha !== hb) return ha - hb;
+    return ((a.last_name||'') + (a.first_name||'')).localeCompare((b.last_name||'') + (b.first_name||''));
+  });
+  var list = document.getElementById('hh-photo-pick-list');
+  list.innerHTML = withPhotos.map(function(m) {
+    var name = ((m.first_name||'') + ' ' + (m.last_name||'')).trim();
+    var role = m.family_role ? ' · ' + m.family_role : '';
+    return '<div onclick="useMemberPhoto(' + m.id + ')" style="cursor:pointer;width:120px;text-align:center;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--white);">'
+      + '<img src="' + esc(photoSrc(m.photo_url)) + '" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:50%;display:block;margin:0 auto 6px;">'
+      + '<div style="font-size:.85rem;font-weight:600;color:var(--charcoal);">' + esc(name) + '</div>'
+      + '<div style="font-size:.72rem;color:var(--warm-gray);text-transform:capitalize;">' + esc(role.replace(/^ \xb7 /, '')) + '</div>'
+      + '</div>';
+  }).join('');
+  openModal('hh-photo-pick-modal');
+}
+function useMemberPhoto(memberId) {
+  var hid = _editingHouseholdId;
+  if (!hid || !memberId) return;
+  api('/admin/api/households/' + hid + '/use-member-photo', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ member_id: memberId })
+  }).then(function(r) {
+    if (!r.ok) { alert('Error: ' + (r.error || 'unknown')); return; }
+    closeModal('hh-photo-pick-modal');
+    document.getElementById('hm-photo').value = r.photo_url || '';
+    var prevEl = document.getElementById('hm-photo-preview');
+    if (prevEl) { prevEl.src = photoSrc(r.photo_url) + '?t=' + Date.now(); prevEl.style.display = 'block'; }
+    document.getElementById('hm-photo-recrop-btn').style.display = 'inline-flex';
+    document.getElementById('hm-photo-remove-btn').style.display = 'inline-flex';
   });
 }
 function applyHHPhotoToMembers() {

@@ -1001,6 +1001,7 @@ export const HTML_TABS_2 = String.raw`
       <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
         <img id="hm-photo-preview" src="" alt="" style="display:none;width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border);">
         <button type="button" id="hm-photo-upload-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="triggerHHPhotoUpload()">&#128247; Upload Photo</button>
+        <button type="button" id="hm-photo-pick-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="openHHPhotoPicker()">&#128100; Use Member's Photo</button>
         <button type="button" id="hm-photo-recrop-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="recropHHPhoto()">&#9986; Re-crop</button>
         <button type="button" id="hm-photo-remove-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;color:var(--clay-red);" onclick="removeHHPhoto()">&times; Remove</button>
         <button type="button" id="hm-apply-photo-btn" class="btn-secondary require-edit" style="display:none;font-size:.82rem;padding:5px 12px;" onclick="applyHHPhotoToMembers()">&#128247; Apply to Family</button>
@@ -1183,6 +1184,14 @@ export const HTML_TABS_2 = String.raw`
       <button class="btn-primary" onclick="addMemberType()">Add</button>
     </div>
     <div class="modal-actions"><button class="btn-secondary" onclick="closeModal('member-types-modal')">Close</button></div>
+  </div>
+</div>
+<div class="modal-overlay" id="hh-photo-pick-modal" onclick="if(event.target===this)closeModal('hh-photo-pick-modal')">
+  <div class="modal" style="max-width:520px;">
+    <h2 style="margin-bottom:6px;">Use a Member's Photo</h2>
+    <div style="font-size:.82rem;color:var(--warm-gray);margin-bottom:12px;">Choose a household member whose profile photo should become the household photo.</div>
+    <div id="hh-photo-pick-list" style="display:flex;flex-wrap:wrap;gap:10px;max-height:50vh;overflow-y:auto;"></div>
+    <div class="modal-actions"><button class="btn-secondary" onclick="closeModal('hh-photo-pick-modal')">Cancel</button></div>
   </div>
 </div>
 <div class="modal-overlay" id="add-to-hh-modal" onclick="if(event.target===this)closeModal('add-to-hh-modal')">
