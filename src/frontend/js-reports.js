@@ -52,6 +52,24 @@ function runMembership() {
 }
 // ── R3: People Insights ───────────────────────────────────────────────
 var _peopleInsightsScope = 'member';
+function drillPeopleInsights(opts) {
+  // Reset filters, apply scope from the report, then layer the bucket filter
+  peopleFilter.q = '';
+  peopleFilter.tagIds = [];
+  peopleFilter.missingFields = [];
+  peopleFilter.gender = '';
+  peopleFilter.ageRange = '';
+  peopleFilter.householdSize = '';
+  peopleFilter.sacrament = '';
+  peopleFilter.mt = (_peopleInsightsScope === 'member') ? 'member' : '';
+  peopleFilter.offset = 0;
+  if (opts.gender)        peopleFilter.gender = opts.gender;
+  if (opts.ageRange)      peopleFilter.ageRange = opts.ageRange;
+  if (opts.householdSize) peopleFilter.householdSize = opts.householdSize;
+  if (opts.sacrament)     peopleFilter.sacrament = opts.sacrament;
+  if (opts.missingDob)    peopleFilter.missingFields = ['dob'];
+  showTab('people');
+}
 function runPeopleInsights(scope) {
   if (scope) _peopleInsightsScope = scope;
   api('/admin/api/reports/people-insights?scope=' + encodeURIComponent(_peopleInsightsScope)).then(function(d) {
@@ -116,11 +134,18 @@ function runPeopleInsights(scope) {
     }
 
     // ── Block 3: Age distribution (horizontal bars) ─────────────────
+    // Map our age_groups keys (under_18, a18_29, …, unknown) to People list filter values
+    var ageDrillKey = { under_18:'under_18', a18_29:'18_29', a30_44:'30_44', a45_64:'45_64', a65_plus:'65_plus' };
     var ageGroups2 = d.age_groups || [];
     var ageTotal2 = ageGroups2.reduce(function(s,b){return s+(b.n||0);},0);
     var ageRows2 = ageGroups2.map(function(b) {
       var pct = ageTotal2 > 0 ? Math.round(b.n * 100 / ageTotal2) : 0;
-      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">'
+      var click;
+      if (b.key === 'unknown') click = "drillPeopleInsights({missingDob:true})";
+      else if (ageDrillKey[b.key]) click = "drillPeopleInsights({ageRange:'" + ageDrillKey[b.key] + "'})";
+      else click = '';
+      var clickAttrs = click ? ' onclick="' + click + '" style="display:flex;align-items:center;gap:8px;margin-bottom:5px;cursor:pointer;" title="Click to view these people"' : ' style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"';
+      return '<div' + clickAttrs + '>'
         + '<div style="flex:0 0 120px;font-size:.85rem;color:var(--charcoal);">'+esc(b.label)+'</div>'
         + '<div style="flex:1;background:var(--linen);border-radius:4px;height:15px;overflow:hidden;">'
         + '<div style="background:#C9973A;height:100%;width:'+pct+'%;"></div></div>'
@@ -130,31 +155,41 @@ function runPeopleInsights(scope) {
       + '<div style="font-weight:700;color:var(--steel-anchor);font-size:.95rem;margin-bottom:8px;">&#127891; Age Distribution — '+scopeLabel+' ('+ageTotal2+')</div>'
       + ageRows2 + '</div>';
 
-    // ── Block 4: Gender pie chart ───────────────────────────────────
+    // ── Block 4: Gender pie chart + drillable rows ─────────────────
     var genderColors = { Male:'#2E7EA6', Female:'#C9973A', Unknown:'#b0a090' };
-    var genderItems = (d.gender||[]).map(function(r){
+    var genderRaw = d.gender || [];
+    var genderItems = genderRaw.map(function(r){
       return { label: esc(r.g), value: r.n, color: genderColors[r.g] || '#888' };
     });
     var genderTotal = genderItems.reduce(function(s,it){return s+(it.value||0);},0);
+    var genderRows = genderRaw.map(function(r) {
+      var pct = genderTotal > 0 ? Math.round((r.n||0) * 100 / genderTotal) : 0;
+      var color = genderColors[r.g] || '#888';
+      var click = "drillPeopleInsights({gender:'" + r.g + "'})";
+      return '<div onclick="' + click + '" title="Click to view these people" style="display:flex;align-items:center;gap:8px;margin-bottom:5px;cursor:pointer;">'
+        + '<div style="flex:0 0 120px;font-size:.85rem;color:var(--charcoal);">'+esc(r.g)+'</div>'
+        + '<div style="flex:1;background:var(--linen);border-radius:4px;height:15px;overflow:hidden;">'
+        + '<div style="background:'+color+';height:100%;width:'+pct+'%;"></div></div>'
+        + '<div style="flex:0 0 90px;text-align:right;font-size:.82rem;color:var(--warm-gray);">'+(r.n||0)+' ('+pct+'%)</div></div>';
+    }).join('');
     var genderBlock = '<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;">'
       + '<div style="font-weight:700;color:var(--steel-anchor);font-size:.95rem;margin-bottom:8px;">&#9874;&#65039; Gender Breakdown — '+scopeLabel+' ('+genderTotal+')</div>'
-      + '<div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">'
-      + renderPieChart(genderItems, 180)
-      + '</div></div>';
+      + genderRows + '</div>';
 
     // ── Block 5: Household composition ─────────────────────────────
     var hh = d.household_sizes || {};
     var hhItems = [
-      { label: 'Single (1 person)',     value: hh.single || 0,       color: '#2E7EA6' },
-      { label: 'Couple (2 people)',     value: hh.couple || 0,       color: '#5A9E6F' },
-      { label: 'Small family (3–4)',    value: hh.small  || 0,       color: '#C9973A' },
-      { label: 'Large family (5+)',     value: hh.large  || 0,       color: '#9B59B6' },
-      { label: 'No household assigned', value: hh.no_household || 0, color: '#b0a090' },
+      { label: 'Single (1 person)',     value: hh.single || 0,       color: '#2E7EA6', key: 'single' },
+      { label: 'Couple (2 people)',     value: hh.couple || 0,       color: '#5A9E6F', key: 'couple' },
+      { label: 'Small family (3–4)',    value: hh.small  || 0,       color: '#C9973A', key: 'small' },
+      { label: 'Large family (5+)',     value: hh.large  || 0,       color: '#9B59B6', key: 'large' },
+      { label: 'No household assigned', value: hh.no_household || 0, color: '#b0a090', key: 'no_household' },
     ];
     var hhTotal2 = hhItems.reduce(function(s,it){return s+(it.value||0);},0);
     var hhRows2 = hhItems.map(function(it) {
       var pct = hhTotal2 > 0 ? Math.round(it.value * 100 / hhTotal2) : 0;
-      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">'
+      var click = "drillPeopleInsights({householdSize:'" + it.key + "'})";
+      return '<div onclick="' + click + '" title="Click to view these people" style="display:flex;align-items:center;gap:8px;margin-bottom:5px;cursor:pointer;">'
         + '<div style="flex:0 0 170px;font-size:.85rem;color:var(--charcoal);">'+esc(it.label)+'</div>'
         + '<div style="flex:1;background:var(--linen);border-radius:4px;height:15px;overflow:hidden;">'
         + '<div style="background:'+it.color+';height:100%;width:'+pct+'%;opacity:.8;"></div></div>'
@@ -164,25 +199,26 @@ function runPeopleInsights(scope) {
       + '<div style="font-weight:700;color:var(--steel-anchor);font-size:.95rem;margin-bottom:8px;">&#127968; Household Composition — '+scopeLabel+' ('+hhTotal2+')</div>'
       + hhRows2 + '</div>';
 
-    // ── Block 6: Sacramental pipeline (members only) ────────────────
+    // ── Block 6: Baptism & Confirmation (members only) ──────────────
     var pl = d.sacramental_pipeline || {};
     var plTotal = (pl.both||0) + (pl.baptized_only||0) + (pl.confirmed_only||0) + (pl.neither||0);
     var plItems = [
-      { label: 'Baptized &amp; Confirmed', value: pl.both||0,            color:'#5A9E6F' },
-      { label: 'Baptized only',            value: pl.baptized_only||0,   color:'#2E7EA6' },
-      { label: 'Confirmed only',           value: pl.confirmed_only||0,  color:'#C9973A' },
-      { label: 'Neither recorded',         value: pl.neither||0,         color:'#b0a090' },
+      { label: 'Baptized &amp; Confirmed', value: pl.both||0,            color:'#5A9E6F', key:'both' },
+      { label: 'Baptized only',            value: pl.baptized_only||0,   color:'#2E7EA6', key:'baptized_only' },
+      { label: 'Confirmed only',           value: pl.confirmed_only||0,  color:'#C9973A', key:'confirmed_only' },
+      { label: 'Neither recorded',         value: pl.neither||0,         color:'#b0a090', key:'neither' },
     ];
     var plRows = plItems.map(function(it) {
       var pct = plTotal > 0 ? Math.round(it.value * 100 / plTotal) : 0;
-      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">'
+      var click = "drillPeopleInsights({sacrament:'" + it.key + "'})";
+      return '<div onclick="' + click + '" title="Click to view these people" style="display:flex;align-items:center;gap:8px;margin-bottom:5px;cursor:pointer;">'
         + '<div style="flex:0 0 180px;font-size:.85rem;color:var(--charcoal);">'+it.label+'</div>'
         + '<div style="flex:1;background:var(--linen);border-radius:4px;height:15px;overflow:hidden;">'
         + '<div style="background:'+it.color+';height:100%;width:'+pct+'%;opacity:.85;"></div></div>'
         + '<div style="flex:0 0 90px;text-align:right;font-size:.82rem;color:var(--warm-gray);">'+it.value+' ('+pct+'%)</div></div>';
     }).join('');
     var pipelineBlock = '<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px;">'
-      + '<div style="font-weight:700;color:var(--steel-anchor);font-size:.95rem;margin-bottom:4px;">&#9989; Sacramental Pipeline ('+plTotal+' members)</div>'
+      + '<div style="font-weight:700;color:var(--steel-anchor);font-size:.95rem;margin-bottom:4px;">&#9989; Baptism &amp; Confirmation ('+plTotal+' members)</div>'
       + '<div style="font-size:.78rem;color:var(--warm-gray);margin-bottom:8px;">Members only — baptized and confirmed flags from Breeze profile.</div>'
       + plRows + '</div>';
 

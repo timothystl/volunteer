@@ -27,6 +27,8 @@ function loadPeople(resetPage) {
   if (peopleFilter.missingFields && peopleFilter.missingFields.length) params.set('missing_fields', peopleFilter.missingFields.join(','));
   if (peopleFilter.gender) params.set('gender', peopleFilter.gender);
   if (peopleFilter.ageRange) params.set('age_range', peopleFilter.ageRange);
+  if (peopleFilter.householdSize) params.set('household_size', peopleFilter.householdSize);
+  if (peopleFilter.sacrament) params.set('sacrament', peopleFilter.sacrament);
   params.set('limit', peopleFilter.limit);
   params.set('offset', peopleFilter.offset);
   params.set('sort', peopleFilter.sort || 'last_name');

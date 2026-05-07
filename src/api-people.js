@@ -156,6 +156,25 @@ if (seg === 'people' && method === 'GET') {
     '65_plus':`(p.dob != '' AND p.dob IS NOT NULL AND (julianday('now')-julianday(p.dob))/365.25 >= 65)`,
   };
   if (ageRangeClauses[ageRange]) where += ' AND ' + ageRangeClauses[ageRange];
+  // Household size filter (matches People Insights buckets)
+  const hhSize = url.searchParams.get('household_size') || '';
+  const hhSizeClauses = {
+    single:       `(SELECT COUNT(*) FROM people ps WHERE ps.household_id=p.household_id AND ps.active=1) = 1`,
+    couple:       `(SELECT COUNT(*) FROM people ps WHERE ps.household_id=p.household_id AND ps.active=1) = 2`,
+    small:        `(SELECT COUNT(*) FROM people ps WHERE ps.household_id=p.household_id AND ps.active=1) BETWEEN 3 AND 4`,
+    large:        `(SELECT COUNT(*) FROM people ps WHERE ps.household_id=p.household_id AND ps.active=1) >= 5`,
+    no_household: `(p.household_id IS NULL OR p.household_id=0)`,
+  };
+  if (hhSizeClauses[hhSize]) where += ' AND ' + hhSizeClauses[hhSize];
+  // Baptism & Confirmation status filter
+  const sacrament = url.searchParams.get('sacrament') || '';
+  const sacramentClauses = {
+    both:            `(p.baptized=1 AND p.confirmed=1)`,
+    baptized_only:   `(p.baptized=1 AND p.confirmed=0)`,
+    confirmed_only:  `(p.baptized=0 AND p.confirmed=1)`,
+    neither:         `(p.baptized=0 AND p.confirmed=0)`,
+  };
+  if (sacramentClauses[sacrament]) where += ' AND ' + sacramentClauses[sacrament];
   // Total count
   const countRow = await db.prepare(`SELECT COUNT(*) as n FROM people p WHERE ${where}`).bind(...binds).first();
   const total = countRow?.n || 0;
