@@ -264,6 +264,50 @@ if (seg === 'people/bulk-member-type' && method === 'POST') {
   return json({ ok: true, updated: ids.length });
 }
 
+// Bulk communications opt-in: flips sms_opt_in and/or pushes addresses to Brevo
+// in a single call. body: { ids: [], sms: 'in'|'out'|null, newsletter: 'add'|null }
+if (seg === 'people/bulk-comm-opt' && method === 'POST') {
+  if (!isStaff) return json({ error: 'Insufficient permissions' }, 403);
+  let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
+  const sms = b.sms === 'in' ? 1 : b.sms === 'out' ? 0 : null;
+  const newsletter = b.newsletter === 'add';
+  if (!ids.length) return json({ error: 'ids required' }, 400);
+  if (sms === null && !newsletter) return json({ error: 'no action selected' }, 400);
+  const result = { ids: ids.length, sms_updated: 0, newsletter_added: 0, newsletter_skipped_no_email: 0, newsletter_error: '' };
+  // Chunk to stay under D1's ~100 param limit
+  const CHUNK = 90;
+  if (sms !== null) {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const r = await db.prepare(`UPDATE people SET sms_opt_in=?, locally_edited=1 WHERE id IN (${ph})`).bind(sms, ...chunk).run();
+      result.sms_updated += r.meta?.changes ?? 0;
+    }
+  }
+  if (newsletter) {
+    const contacts = [];
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const rows = (await db.prepare(
+        `SELECT id, first_name, last_name, email FROM people WHERE id IN (${ph})`
+      ).bind(...chunk).all()).results || [];
+      for (const r of rows) {
+        const em = (r.email || '').trim();
+        if (!em) { result.newsletter_skipped_no_email++; continue; }
+        contacts.push({ email: em, firstName: r.first_name || '', lastName: r.last_name || '' });
+      }
+    }
+    if (contacts.length) {
+      const sync = await brevoBulkSync(env, contacts);
+      if (sync.ok) result.newsletter_added = contacts.length;
+      else result.newsletter_error = sync.error || 'unknown';
+    }
+  }
+  return json({ ok: true, ...result });
+}
+
 const pmatch = seg.match(/^people\/(\d+)$/);
 if (pmatch) {
   const pid = parseInt(pmatch[1]);

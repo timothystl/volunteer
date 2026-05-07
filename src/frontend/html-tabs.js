@@ -29,7 +29,29 @@ export const HTML_TABS_1 = String.raw`<!-- ═══ HOME / DASHBOARD TAB ══
     </select>
     <button class="btn-sm" onclick="applyBulkMemberType()" style="background:#fff;color:var(--steel-anchor);">Apply</button>
     <button class="btn-sm" onclick="openBulkTagsPanel()" style="background:#fff;color:var(--steel-anchor);">&#9881; Tags</button>
+    <button class="btn-sm" onclick="openBulkCommPanel()" style="background:#fff;color:var(--steel-anchor);">&#9993; Comms</button>
     <button class="btn-sm" onclick="clearSelection()" style="background:rgba(255,255,255,.2);color:#fff;">Cancel</button>
+  </div>
+  <!-- Bulk communications opt-in/out mini-panel -->
+  <div id="p-bulk-comm-panel" style="display:none;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:4px 0 8px;">
+    <div style="font-size:.78rem;font-weight:700;color:var(--warm-gray);text-transform:uppercase;margin-bottom:8px;">Bulk Communications Opt-In</div>
+    <div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:12px;">
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:.88rem;">
+        <div style="font-weight:700;color:var(--charcoal);">SMS (text messages)</div>
+        <label><input type="radio" name="bulk-sms" value=""    checked> No change</label>
+        <label><input type="radio" name="bulk-sms" value="in">  Opt-in</label>
+        <label><input type="radio" name="bulk-sms" value="out"> Opt-out</label>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:.88rem;">
+        <div style="font-weight:700;color:var(--charcoal);">Newsletter (Brevo)</div>
+        <label><input type="radio" name="bulk-news" value=""    checked> No change</label>
+        <label><input type="radio" name="bulk-news" value="add"> Add to list (requires email)</label>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary" style="font-size:.82rem;padding:5px 12px;" onclick="applyBulkComm()">Apply</button>
+      <button class="btn-secondary" style="font-size:.82rem;padding:5px 12px;" onclick="document.getElementById(&#39;p-bulk-comm-panel&#39;).style.display=&#39;none&#39;">Cancel</button>
+    </div>
   </div>
   <!-- Bulk tags mini-panel -->
   <div id="p-bulk-tags-panel" style="display:none;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:4px 0 8px;">

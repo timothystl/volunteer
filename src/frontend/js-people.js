@@ -224,6 +224,44 @@ function openBulkTagsPanel() {
   var panel = document.getElementById('p-bulk-tags-panel');
   if (panel) panel.style.display = '';
 }
+function openBulkCommPanel() {
+  if (!_selectedPeople.size) { alert('No people selected.'); return; }
+  // Reset the form each time
+  document.querySelectorAll('input[name="bulk-sms"]').forEach(function(r){ r.checked = (r.value === ''); });
+  document.querySelectorAll('input[name="bulk-news"]').forEach(function(r){ r.checked = (r.value === ''); });
+  var panel = document.getElementById('p-bulk-comm-panel');
+  if (panel) panel.style.display = '';
+}
+function applyBulkComm() {
+  if (!_selectedPeople.size) { alert('No people selected.'); return; }
+  var sms = (document.querySelector('input[name="bulk-sms"]:checked')||{}).value || '';
+  var news = (document.querySelector('input[name="bulk-news"]:checked')||{}).value || '';
+  if (!sms && !news) {
+    document.getElementById('p-bulk-comm-panel').style.display = 'none';
+    return;
+  }
+  var ids = Array.from(_selectedPeople);
+  var body = { ids: ids };
+  if (sms)  body.sms = sms;
+  if (news) body.newsletter = news;
+  api('/admin/api/people/bulk-comm-opt', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  }).then(function(r) {
+    document.getElementById('p-bulk-comm-panel').style.display = 'none';
+    if (!r.ok) { alert('Error: ' + (r.error || 'unknown')); return; }
+    var msg = [];
+    if (sms) msg.push('SMS ' + (sms === 'in' ? 'opt-in' : 'opt-out') + ' set on ' + r.sms_updated + ' people.');
+    if (news) {
+      msg.push('Newsletter: added ' + r.newsletter_added + (r.newsletter_skipped_no_email ? ' (skipped ' + r.newsletter_skipped_no_email + ' with no email)' : '') + '.');
+      if (r.newsletter_error) msg.push('Newsletter error: ' + r.newsletter_error);
+    }
+    alert(msg.join('\n'));
+    clearSelection();
+    loadPeople();
+  });
+}
 function applyBulkTags() {
   if (!_selectedPeople.size) { alert('No people selected.'); return; }
   var adds = [], removes = [];
