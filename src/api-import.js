@@ -2460,7 +2460,7 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
   let photoUrl = '';
   const rawPathPS = (typeof p.path === 'string' && p.path) ? p.path : (typeof p.photo === 'string' && p.photo ? p.photo : '');
   if (rawPathPS && !GENERIC_PAT_PS.some(pat => rawPathPS.toLowerCase().includes(pat))) {
-    photoUrl = `https://${subdomain}.breezechms.com/${rawPathPS.replace(/^\/+/, '')}`;
+    photoUrl = `https://files.breezechms.com/${rawPathPS.replace(/^\/+/, '')}`;
   } else if (typeof p.thumb === 'string' && p.thumb.startsWith('https://') &&
              p.thumb.includes('breezechms.com') &&
              !GENERIC_PAT_PS.some(pat => p.thumb.toLowerCase().includes(pat))) {
@@ -2812,7 +2812,7 @@ if (seg === 'import/breeze' && method === 'POST') { try {
       let photoUrl = '';
       const rawPath = (typeof p.path === 'string' && p.path) ? p.path : (typeof p.photo === 'string' && p.photo ? p.photo : '');
       if (rawPath && !GENERIC_PAT.some(pat => rawPath.toLowerCase().includes(pat))) {
-        photoUrl = `https://${subdomain}.breezechms.com/${rawPath.replace(/^\/+/, '')}`;
+        photoUrl = `https://files.breezechms.com/${rawPath.replace(/^\/+/, '')}`;
       } else if (typeof p.thumb === 'string' && p.thumb.startsWith('https://') &&
                  p.thumb.includes('breezechms.com') &&
                  !GENERIC_PAT.some(pat => p.thumb.toLowerCase().includes(pat))) {
