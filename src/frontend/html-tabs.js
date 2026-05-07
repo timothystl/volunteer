@@ -30,7 +30,31 @@ export const HTML_TABS_1 = String.raw`<!-- ═══ HOME / DASHBOARD TAB ══
     <button class="btn-sm" onclick="applyBulkMemberType()" style="background:#fff;color:var(--steel-anchor);">Apply</button>
     <button class="btn-sm" onclick="openBulkTagsPanel()" style="background:#fff;color:var(--steel-anchor);">&#9881; Tags</button>
     <button class="btn-sm" onclick="openBulkCommPanel()" style="background:#fff;color:var(--steel-anchor);">&#9993; Comms</button>
+    <button class="btn-sm" onclick="openBulkSacramentPanel()" style="background:#fff;color:var(--steel-anchor);">&#10010; Sacraments</button>
     <button class="btn-sm" onclick="clearSelection()" style="background:rgba(255,255,255,.2);color:#fff;">Cancel</button>
+  </div>
+  <!-- Bulk sacrament-flag mini-panel -->
+  <div id="p-bulk-sacrament-panel" style="display:none;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:4px 0 8px;">
+    <div style="font-size:.78rem;font-weight:700;color:var(--warm-gray);text-transform:uppercase;margin-bottom:8px;">Bulk Sacramental Status</div>
+    <div style="font-size:.78rem;color:var(--warm-gray);margin-bottom:10px;">For all selected people, mark them as baptized and/or confirmed (date unknown). Use after filtering by missing baptism/confirmation date.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:12px;">
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:.88rem;">
+        <div style="font-weight:700;color:var(--charcoal);">Baptized</div>
+        <label><input type="radio" name="bulk-bap"  value=""      checked> No change</label>
+        <label><input type="radio" name="bulk-bap"  value="set">   Mark Yes</label>
+        <label><input type="radio" name="bulk-bap"  value="unset"> Mark No</label>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:.88rem;">
+        <div style="font-weight:700;color:var(--charcoal);">Confirmed</div>
+        <label><input type="radio" name="bulk-con"  value=""      checked> No change</label>
+        <label><input type="radio" name="bulk-con"  value="set">   Mark Yes</label>
+        <label><input type="radio" name="bulk-con"  value="unset"> Mark No</label>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary" style="font-size:.82rem;padding:5px 12px;" onclick="applyBulkSacrament()">Apply</button>
+      <button class="btn-secondary" style="font-size:.82rem;padding:5px 12px;" onclick="document.getElementById(&#39;p-bulk-sacrament-panel&#39;).style.display=&#39;none&#39;">Cancel</button>
+    </div>
   </div>
   <!-- Bulk communications opt-in/out mini-panel -->
   <div id="p-bulk-comm-panel" style="display:none;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:4px 0 8px;">
@@ -910,10 +934,26 @@ export const HTML_TABS_2 = String.raw`
       </div>
       <div class="modal-section">Dates</div>
       <div class="modal-2col">
-        <div class="field"><label>Date of Birth</label><input type="date" id="pm-dob" name="pm-dob"></div>
-        <div class="field"><label>Baptism</label><input type="date" id="pm-baptism" name="pm-baptism"></div>
-        <div class="field"><label>Confirmation</label><input type="date" id="pm-confirm" name="pm-confirm"></div>
-        <div class="field"><label>Anniversary</label><input type="date" id="pm-anniv" name="pm-anniv"></div>
+        <div class="field">
+          <label>Date of Birth</label>
+          <input type="date" id="pm-dob" name="pm-dob">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.78rem;color:var(--warm-gray);margin-top:3px;"><input type="checkbox" id="pm-dob-noyear"> Year unknown (just month/day)</label>
+        </div>
+        <div class="field">
+          <label>Baptism</label>
+          <input type="date" id="pm-baptism" name="pm-baptism">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.78rem;color:var(--warm-gray);margin-top:3px;"><input type="checkbox" id="pm-baptism-noyear"> Year unknown (just month/day)</label>
+        </div>
+        <div class="field">
+          <label>Confirmation</label>
+          <input type="date" id="pm-confirm" name="pm-confirm">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.78rem;color:var(--warm-gray);margin-top:3px;"><input type="checkbox" id="pm-confirm-noyear"> Year unknown (just month/day)</label>
+        </div>
+        <div class="field">
+          <label>Anniversary</label>
+          <input type="date" id="pm-anniv" name="pm-anniv">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.78rem;color:var(--warm-gray);margin-top:3px;"><input type="checkbox" id="pm-anniv-noyear"> Year unknown (just month/day)</label>
+        </div>
         <div class="field"><label>Death Date</label><input type="date" id="pm-death" name="pm-death"></div>
       </div>
       <div style="margin-bottom:10px;display:flex;gap:24px;flex-wrap:wrap;">

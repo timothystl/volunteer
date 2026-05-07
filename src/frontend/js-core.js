@@ -1,6 +1,6 @@
 export const JS_CORE = String.raw`<script>
 // ── DEPLOY VERSION ───────────────────────────────────────────────────
-var DEPLOY_VERSION = '2026-05-07-v204';
+var DEPLOY_VERSION = '2026-05-07-v205';
 window.onerror = function(msg, src, line, col, err) {
   // Benign browser quirks — suppress these and don't show the error banner.
   if (msg && String(msg).indexOf('ResizeObserver loop') !== -1) return true;
@@ -69,6 +69,13 @@ function fmtMoney(cents) {
 function fmtDate(iso) {
   if (!iso) return '';
   var p = iso.split('-'); if (p.length < 3) return iso;
+  // Year-unknown sentinel: "0001-MM-DD" displays as month/day only
+  if (p[0] === '0001') {
+    var monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var mIdx = parseInt(p[1]) - 1;
+    var label = (monthNames[mIdx] || p[1]) + ' ' + parseInt(p[2]);
+    return label;
+  }
   return parseInt(p[1]) + '/' + parseInt(p[2]) + '/' + p[0];
 }
 function esc(s) {

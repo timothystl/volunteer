@@ -49,7 +49,7 @@ if (seg === 'reports/people-insights' && method === 'GET') {
     // Age distribution
     db.prepare(
       `SELECT CASE
-         WHEN dob='' OR dob IS NULL THEN 'unknown'
+         WHEN dob='' OR dob IS NULL OR dob LIKE '0001-%' THEN 'unknown'
          WHEN (julianday('now')-julianday(dob))/365.25 < 18 THEN 'under_18'
          WHEN (julianday('now')-julianday(dob))/365.25 < 30 THEN 'a18_29'
          WHEN (julianday('now')-julianday(dob))/365.25 < 45 THEN 'a30_44'
@@ -165,7 +165,7 @@ if (seg === 'reports/membership' && method === 'GET') {
   const ageSql = `
     SELECT
       CASE
-        WHEN dob = '' OR dob IS NULL THEN 'unknown'
+        WHEN dob = '' OR dob IS NULL OR dob LIKE '0001-%' THEN 'unknown'
         WHEN (julianday('now') - julianday(dob)) / 365.25 < 18 THEN 'under_18'
         WHEN (julianday('now') - julianday(dob)) / 365.25 < 30 THEN 'a18_29'
         WHEN (julianday('now') - julianday(dob)) / 365.25 < 45 THEN 'a30_44'
@@ -723,7 +723,7 @@ if (seg === 'reports/giving-summary' && method === 'GET') {
   const ageRows = (await db.prepare(
     `SELECT
        CASE
-         WHEN p.dob = '' OR p.dob IS NULL THEN 'unknown'
+         WHEN p.dob = '' OR p.dob IS NULL OR p.dob LIKE '0001-%' THEN 'unknown'
          WHEN (julianday('now') - julianday(p.dob)) / 365.25 < 18 THEN 'under_18'
          WHEN (julianday('now') - julianday(p.dob)) / 365.25 < 30 THEN 'a18_29'
          WHEN (julianday('now') - julianday(p.dob)) / 365.25 < 45 THEN 'a30_44'

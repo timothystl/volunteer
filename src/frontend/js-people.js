@@ -224,6 +224,40 @@ function openBulkTagsPanel() {
   var panel = document.getElementById('p-bulk-tags-panel');
   if (panel) panel.style.display = '';
 }
+function openBulkSacramentPanel() {
+  if (!_selectedPeople.size) { alert('No people selected.'); return; }
+  document.querySelectorAll('input[name="bulk-bap"]').forEach(function(r){ r.checked = (r.value === ''); });
+  document.querySelectorAll('input[name="bulk-con"]').forEach(function(r){ r.checked = (r.value === ''); });
+  var panel = document.getElementById('p-bulk-sacrament-panel');
+  if (panel) panel.style.display = '';
+}
+function applyBulkSacrament() {
+  if (!_selectedPeople.size) { alert('No people selected.'); return; }
+  var bap = (document.querySelector('input[name="bulk-bap"]:checked')||{}).value || '';
+  var con = (document.querySelector('input[name="bulk-con"]:checked')||{}).value || '';
+  if (!bap && !con) {
+    document.getElementById('p-bulk-sacrament-panel').style.display = 'none';
+    return;
+  }
+  var ids = Array.from(_selectedPeople);
+  var body = { ids: ids };
+  if (bap) body.baptized = bap;
+  if (con) body.confirmed = con;
+  api('/admin/api/people/bulk-sacrament', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  }).then(function(r) {
+    document.getElementById('p-bulk-sacrament-panel').style.display = 'none';
+    if (!r.ok) { alert('Error: ' + (r.error || 'unknown')); return; }
+    var msg = [];
+    if (bap) msg.push('Baptized ' + (bap === 'set' ? 'set' : 'cleared') + ' on ' + r.baptized_updated + ' people.');
+    if (con) msg.push('Confirmed ' + (con === 'set' ? 'set' : 'cleared') + ' on ' + r.confirmed_updated + ' people.');
+    alert(msg.join('\n'));
+    clearSelection();
+    loadPeople();
+  });
+}
 function openBulkCommPanel() {
   if (!_selectedPeople.size) { alert('No people selected.'); return; }
   // Reset the form each time
@@ -310,8 +344,33 @@ function renderPeopleMobile(people) {
 }
 
 // ── PERSON DETAIL ─────────────────────────────────────────────────────
+// Read a date input that may have a paired "year unknown" checkbox.
+// Returns "0001-MM-DD" when the box is checked so backend math/display can detect it.
+function pmReadDate(inputId, cbId) {
+  var v = document.getElementById(inputId).value;
+  if (!v) return '';
+  var cb = document.getElementById(cbId);
+  if (cb && cb.checked) {
+    var parts = v.split('-');
+    if (parts.length === 3) return '0001-' + parts[1] + '-' + parts[2];
+  }
+  return v;
+}
+// Render a field-card date input with paired "Year unknown" checkbox.
+// Used by the inline Demographics editor on the profile page.
+function pedDateField(idBase, label, val) {
+  var noYear = !!(val && val.indexOf('0001-') === 0);
+  var displayVal = noYear ? ('2000' + val.slice(4)) : (val ? val.slice(0,10) : '');
+  var inp = 'width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:13px;font-family:inherit;background:var(--white);';
+  return '<div class="pv-field-card"><label for="' + idBase + '" class="pv-field-card-lbl">' + label + '</label>'
+    + '<input type="date" id="' + idBase + '" value="' + esc(displayVal) + '" style="' + inp + '">'
+    + '<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--warm-gray);margin-top:3px;cursor:pointer;">'
+    + '<input type="checkbox" id="' + idBase + '-noyear"' + (noYear ? ' checked' : '') + '> Year unknown</label></div>';
+}
 function calcAge(ds) {
   if (!ds) return '';
+  // Year-unknown sentinel — no age computable
+  if (ds.indexOf('0001-') === 0) return '';
   var d = new Date(ds), now = new Date();
   var age = now.getFullYear() - d.getFullYear();
   if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) age--;
@@ -635,12 +694,12 @@ function pvEditDemo() {
     + '<div class="pv-field-grid">'
     + '<div class="pv-field-card"><label for="ped-gender" class="pv-field-card-lbl">gender</label><select id="ped-gender" style="'+inp+'">'+gOpts+'</select></div>'
     + '<div class="pv-field-card"><label for="ped-ms" class="pv-field-card-lbl">marital status</label><select id="ped-ms" style="'+inp+'">'+msOpts+'</select></div>'
-    + '<div class="pv-field-card"><label for="ped-dob" class="pv-field-card-lbl">birthday</label><input type="date" id="ped-dob" value="'+esc(p.dob ? p.dob.slice(0,10) : '')+'" style="'+inp+'"></div>'
-    + '<div class="pv-field-card"><label for="ped-bap" class="pv-field-card-lbl">baptized (date)</label><input type="date" id="ped-bap" name="ped-bap" value="'+esc(p.baptism_date ? p.baptism_date.slice(0,10) : '')+'" style="'+inp+'"></div>'
+    + pedDateField('ped-dob',  'birthday',          p.dob)
+    + pedDateField('ped-bap',  'baptized (date)',   p.baptism_date)
     + '<div class="pv-field-card" style="display:flex;flex-direction:column;gap:4px;"><label class="pv-field-card-lbl">baptized (no date)</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="ped-baptized" name="ped-baptized"'+(p.baptized?' checked':'')+' style="width:16px;height:16px;cursor:pointer;"> Yes, date unknown</label></div>'
-    + '<div class="pv-field-card"><label for="ped-conf" class="pv-field-card-lbl">confirmed (date)</label><input type="date" id="ped-conf" name="ped-conf" value="'+esc(p.confirmation_date ? p.confirmation_date.slice(0,10) : '')+'" style="'+inp+'"></div>'
+    + pedDateField('ped-conf', 'confirmed (date)',  p.confirmation_date)
     + '<div class="pv-field-card" style="display:flex;flex-direction:column;gap:4px;"><label class="pv-field-card-lbl">confirmed (no date)</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="ped-confirmed" name="ped-confirmed"'+(p.confirmed?' checked':'')+' style="width:16px;height:16px;cursor:pointer;"> Yes, date unknown</label></div>'
-    + '<div class="pv-field-card"><label for="ped-ann" class="pv-field-card-lbl">anniversary</label><input type="date" id="ped-ann" value="'+esc(p.anniversary_date ? p.anniversary_date.slice(0,10) : '')+'" style="'+inp+'"></div>'
+    + pedDateField('ped-ann',  'anniversary',       p.anniversary_date)
     + '</div>';
   var f = sec.querySelector('select'); if (f) f.focus();
 }
@@ -652,12 +711,12 @@ function pvSaveDemo() {
   var patch = pvBuildPersonPatch(p, {
     gender:            (document.getElementById('ped-gender')||{}).value || '',
     marital_status:    (document.getElementById('ped-ms')||{}).value || '',
-    dob:               (document.getElementById('ped-dob')||{}).value || null,
-    baptism_date:      (document.getElementById('ped-bap')||{}).value || null,
+    dob:               pmReadDate('ped-dob',  'ped-dob-noyear')  || null,
+    baptism_date:      pmReadDate('ped-bap',  'ped-bap-noyear')  || null,
     baptized:          (document.getElementById('ped-baptized')||{}).checked ? 1 : 0,
-    confirmation_date: (document.getElementById('ped-conf')||{}).value || null,
+    confirmation_date: pmReadDate('ped-conf', 'ped-conf-noyear') || null,
     confirmed:         (document.getElementById('ped-confirmed')||{}).checked ? 1 : 0,
-    anniversary_date:  (document.getElementById('ped-ann')||{}).value || null
+    anniversary_date:  pmReadDate('ped-ann',  'ped-ann-noyear')  || null
   });
   api('/admin/api/people/'+p.id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(patch)})
     .then(function() {
@@ -1845,10 +1904,19 @@ function openPersonEdit(p) {
   document.getElementById('pm-role').value = isNew ? '' : (p.family_role||'');
   document.getElementById('pm-gender').value = isNew ? '' : (p.gender||'');
   document.getElementById('pm-marital').value = isNew ? '' : (p.marital_status||'');
-  document.getElementById('pm-dob').value = isNew ? '' : (p.dob||'');
-  document.getElementById('pm-baptism').value = isNew ? '' : (p.baptism_date||'');
-  document.getElementById('pm-confirm').value = isNew ? '' : (p.confirmation_date||'');
-  document.getElementById('pm-anniv').value = isNew ? '' : (p.anniversary_date||'');
+  // Date pickers can't render year 0001, so when a sentinel value is loaded
+  // we display a 2000-MM-DD placeholder in the picker and tick "Year unknown".
+  function loadPmDate(inputId, cbId, val) {
+    var noYear = !!(val && val.indexOf('0001-') === 0);
+    var displayVal = noYear ? ('2000' + val.slice(4)) : (val || '');
+    document.getElementById(inputId).value = displayVal;
+    var cb = document.getElementById(cbId);
+    if (cb) cb.checked = noYear;
+  }
+  loadPmDate('pm-dob',     'pm-dob-noyear',     isNew ? '' : (p.dob||''));
+  loadPmDate('pm-baptism', 'pm-baptism-noyear', isNew ? '' : (p.baptism_date||''));
+  loadPmDate('pm-confirm', 'pm-confirm-noyear', isNew ? '' : (p.confirmation_date||''));
+  loadPmDate('pm-anniv',   'pm-anniv-noyear',   isNew ? '' : (p.anniversary_date||''));
   document.getElementById('pm-death').value = isNew ? '' : (p.death_date||'');
   document.getElementById('pm-deceased').checked = !isNew && !!p.deceased;
   var pubEl = document.getElementById('pm-public');
@@ -1931,10 +1999,10 @@ function savePerson() {
     gender: document.getElementById('pm-gender').value,
     marital_status: document.getElementById('pm-marital').value,
     household_id: document.getElementById('pm-hh-id').value || null,
-    dob: document.getElementById('pm-dob').value,
-    baptism_date: document.getElementById('pm-baptism').value,
-    confirmation_date: document.getElementById('pm-confirm').value,
-    anniversary_date: document.getElementById('pm-anniv').value,
+    dob:               pmReadDate('pm-dob',     'pm-dob-noyear'),
+    baptism_date:      pmReadDate('pm-baptism', 'pm-baptism-noyear'),
+    confirmation_date: pmReadDate('pm-confirm', 'pm-confirm-noyear'),
+    anniversary_date:  pmReadDate('pm-anniv',   'pm-anniv-noyear'),
     death_date: document.getElementById('pm-death').value,
     deceased: document.getElementById('pm-deceased').checked ? 1 : 0,
     public_directory: (document.getElementById('pm-public') || {checked:true}).checked ? 1 : 0,
