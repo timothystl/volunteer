@@ -150,7 +150,18 @@ html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--m
         <input type="password" id="login-pass" autocomplete="current-password">
       </div>
       <button class="btn-primary" id="login-btn" onclick="doLogin()">Sign In</button>
-      <div class="auth-switch">First time? <a onclick="showRegister()">Create your account</a></div>
+      <div class="auth-switch">Forgot password? <a onclick="showForgot()">Reset via email</a></div>
+      <div class="auth-switch" style="margin-top:4px;">First time? <a onclick="showRegister()">Create your account</a></div>
+    </div>
+
+    <!-- Forgot password form -->
+    <div id="forgot-form" style="display:none;">
+      <div class="auth-field">
+        <label for="forgot-email">Your email address</label>
+        <input type="email" id="forgot-email" autocomplete="email" placeholder="you@example.com">
+      </div>
+      <button class="btn-primary" id="forgot-btn" onclick="doForgot()">Send Reset Link</button>
+      <div class="auth-switch">Remembered it? <a onclick="showLogin()">Sign in</a></div>
     </div>
 
     <!-- Register form -->
@@ -350,12 +361,39 @@ function setupPushNotifications() {
 function showLogin() {
   document.getElementById('login-form').style.display = 'block';
   document.getElementById('register-form').style.display = 'none';
+  document.getElementById('forgot-form').style.display = 'none';
   document.getElementById('auth-title').textContent = 'Member Portal';
   clearAuthMsgs();
   document.getElementById('login-user').focus();
 }
+function showForgot() {
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('register-form').style.display = 'none';
+  document.getElementById('forgot-form').style.display = 'block';
+  document.getElementById('auth-title').textContent = 'Reset Password';
+  clearAuthMsgs();
+  document.getElementById('forgot-email').focus();
+}
+function doForgot() {
+  var email = (document.getElementById('forgot-email').value || '').trim();
+  if (!email) { showAuthErr('Please enter your email address.'); return; }
+  var btn = document.getElementById('forgot-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  fetch('/member/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email }),
+  }).then(function(r) { return r.json(); }).then(function() {
+    showAuthOk('If we found your email, we sent a password reset link. Check your inbox (and spam folder).');
+    btn.disabled = false; btn.textContent = 'Send Reset Link';
+  }).catch(function() {
+    showAuthErr('Something went wrong. Please try again.');
+    btn.disabled = false; btn.textContent = 'Send Reset Link';
+  });
+}
 function showRegister() {
   document.getElementById('login-form').style.display = 'none';
+  document.getElementById('forgot-form').style.display = 'none';
   document.getElementById('register-form').style.display = 'block';
   document.getElementById('auth-title').textContent = 'Create Account';
   clearAuthMsgs();
@@ -546,6 +584,7 @@ function toggleDirCard(id) {
     + '<div class="dir-card-hh">'+esc(p.household_name||'')+'</div>'
     + (p.email ? '<div class="dir-contact-row">&#9993;&nbsp;<a href="mailto:'+esc(p.email)+'">'+esc(p.email)+'</a></div>' : '')
     + (p.phone ? '<div class="dir-contact-row">&#128222;&nbsp;<a href="tel:'+esc(p.phone)+'">'+esc(p.phone)+'</a></div>' : '')
+    + (p.address ? '<div class="dir-contact-row">&#127968;&nbsp;'+esc(p.address)+'</div>' : '')
     + '</div>';
 }
 function getDirCardCollapsedHtml(id) {

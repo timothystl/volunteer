@@ -5,7 +5,7 @@
 import { json, html, hashPassword, verifyPassword, esc, escHtml } from './auth.js';
 import { initDb } from './db.js';
 
-const MEMBER_IDLE_MS = 30 * 60 * 1000; // 30 minutes
+const MEMBER_IDLE_MS = 8 * 60 * 60 * 1000; // 8 hours (matches admin timeout)
 const INVITE_TTL_MS  =  7 * 24 * 60 * 60 * 1000; // 7 days
 
 // ── Cookie helpers ────────────────────────────────────────────────────────────
@@ -340,6 +340,16 @@ async function verifyTokenPost(req, env, token) {
   });
 }
 
+// R2 photo URLs are stored as /admin/r2photo/... which requires admin auth.
+// Rewrite them to /member/r2photo/... for member portal responses.
+function transformPhotoUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('/admin/r2photo/')) return '/member/r2photo/' + url.slice('/admin/r2photo/'.length);
+  // Breeze CDN URLs — not proxied for members (no admin auth), omit them
+  if (url.indexOf('breezechms.com') >= 0) return '';
+  return url;
+}
+
 // ── Authenticated API: Me ─────────────────────────────────────────────────────
 
 async function memberGetMe(env, auth) {
@@ -354,7 +364,7 @@ async function memberGetMe(env, auth) {
     WHERE p.id = ?
   `).bind(auth.peopleId).first();
   if (!p) return json({ error: 'Not found' }, 404);
-  return json(p);
+  return json({ ...p, photo_url: transformPhotoUrl(p.photo_url || '') });
 }
 
 async function memberPutMe(req, env, auth) {
@@ -380,22 +390,26 @@ async function memberDirectory(env, auth) {
   const db = env.DB;
   const rows = await db.prepare(`
     SELECT p.id, p.first_name, p.last_name, p.photo_url,
-           p.dir_hide_email, p.dir_hide_phone,
-           p.email, p.phone, h.name AS household_name
+           p.dir_hide_email, p.dir_hide_phone, p.dir_hide_address,
+           p.email, p.phone,
+           p.address1, p.city, p.state, p.zip,
+           h.name AS household_name
     FROM people p
     LEFT JOIN households h ON h.id = p.household_id
     WHERE LOWER(p.member_type)='member' AND p.status='active'
     ORDER BY p.last_name, p.first_name
   `).all();
   const people = (rows.results || []).map(function(p) {
+    const addrParts = p.dir_hide_address ? [] : [p.address1, p.city, p.state ? (p.city ? p.state : p.state) : '', p.zip].filter(Boolean);
     return {
       id: p.id,
       first_name: p.first_name,
       last_name: p.last_name,
-      photo_url: p.photo_url || '',
+      photo_url: transformPhotoUrl(p.photo_url || ''),
       household_name: p.household_name || '',
       email: p.dir_hide_email ? '' : (p.email || ''),
       phone: p.dir_hide_phone ? '' : (p.phone || ''),
+      address: p.dir_hide_address ? '' : [p.address1, [p.city, p.state].filter(Boolean).join(', '), p.zip].filter(Boolean).join(', '),
     };
   });
   return json(people);
@@ -405,53 +419,66 @@ async function memberDirectory(env, auth) {
 
 async function memberSchedule(env, auth) {
   const db = env.DB;
-  // Get person's breeze_id and name for matching against scheduler assignments
+
+  // Get person's name and breeze_id for matching against scheduler people list
   const p = await db.prepare('SELECT breeze_id, first_name, last_name FROM people WHERE id=?').bind(auth.peopleId).first();
   if (!p) return json([]);
 
+  const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim().toLowerCase();
   const breezeId = p.breeze_id || '';
-  const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
 
-  // Fetch schedule from KV
-  let schedule = [];
-  try {
-    const raw = await env.RSVP_STORE.get('ws_schedule_v2');
-    if (raw) schedule = JSON.parse(raw);
-  } catch { return json([]); }
+  // Load scheduler people list from D1 to find this person's scheduler-local ID
+  const peopleRow = await db.prepare('SELECT value FROM scheduler_data WHERE key=?').bind('ws_people').first();
+  let schedulerPeople = [];
+  try { if (peopleRow) schedulerPeople = JSON.parse(peopleRow.value); } catch {}
 
-  if (!Array.isArray(schedule)) return json([]);
+  // Match by breezePersonId first, then by full name
+  const matched = schedulerPeople.find(function(sp) {
+    if (breezeId && sp.breezePersonId && sp.breezePersonId === breezeId) return true;
+    return sp.name && sp.name.trim().toLowerCase() === fullName;
+  });
+  if (!matched) return json([]);
+  const schedulerId = matched.id;
+
+  // Load schedule from D1 (format: { "YYYY-MM": { rows: [...] } })
+  const schedRow = await db.prepare('SELECT value FROM scheduler_data WHERE key=?').bind('ws_schedule_v2').first();
+  if (!schedRow) return json([]);
+
+  let schedData = {};
+  try { schedData = JSON.parse(schedRow.value); } catch { return json([]); }
 
   const todayISO = new Date().toISOString().slice(0, 10);
   const assignments = [];
 
-  for (const row of schedule) {
-    const dateStr = row.date ? (typeof row.date === 'string' ? row.date : new Date(row.date).toISOString()) : '';
-    const dateISO = dateStr.slice(0, 10);
-    if (dateISO < todayISO) continue;
+  for (const [, monthData] of Object.entries(schedData)) {
+    if (!monthData || !Array.isArray(monthData.rows)) continue;
+    for (const row of monthData.rows) {
+      const dateISO = (row.dateISO || '').slice(0, 10);
+      if (!dateISO || dateISO < todayISO) continue;
 
-    if (row.type === 'special' && Array.isArray(row.services)) {
-      for (const svc of row.services) {
-        for (const [role, pid] of Object.entries(svc.assignments || {})) {
-          if (pid && (pid === breezeId || pid === String(auth.peopleId))) {
-            assignments.push({ date: dateISO, service: svc.time || 'Service', role, type: 'special', label: row.name || 'Special Service' });
+      if (row.type === 'special' && Array.isArray(row.services)) {
+        for (const svc of row.services) {
+          for (const [role, pid] of Object.entries(svc.assignments || {})) {
+            if (pid === schedulerId) {
+              assignments.push({ date: dateISO, service: svc.time || 'Service', role, type: 'special', label: row.name || 'Special Service' });
+            }
           }
         }
+        continue;
       }
-      continue;
-    }
 
-    if (row.type !== 'sunday') continue;
-    const asns = row.assignments || {};
-    for (const [role, svcs] of Object.entries(asns)) {
-      for (const [svc, pid] of Object.entries(svcs || {})) {
-        if (pid && (pid === breezeId || pid === String(auth.peopleId))) {
-          assignments.push({ date: dateISO, service: svc, role, type: 'sunday', label: row.label || '' });
+      if (row.type !== 'sunday') continue;
+      for (const [role, svcs] of Object.entries(row.assignments || {})) {
+        for (const [svc, pid] of Object.entries(svcs || {})) {
+          if (pid === schedulerId) {
+            assignments.push({ date: dateISO, service: svc, role, type: 'sunday', label: row.label || '' });
+          }
         }
       }
     }
   }
 
-  assignments.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  assignments.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
   return json(assignments);
 }
 
