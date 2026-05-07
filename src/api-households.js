@@ -147,6 +147,44 @@ export async function handleHouseholdsApi(req, env, url, method, seg, db, isAdmi
     return json({ ok: true, updated: r.meta?.changes ?? 0 });
   }
 
+  // ── Apply household photo to members (per-household) ─────────────
+  // Mirror of sync-address: only members with NO photo get the household photo,
+  // never clobbering an individual's manual-upload or Breeze-synced photo.
+  const hhApplyPhoto = seg.match(/^households\/(\d+)\/apply-photo-to-members$/);
+  if (hhApplyPhoto && method === 'POST') {
+    if (!canEdit) return json({ error: 'Access denied' }, 403);
+    const hid = parseInt(hhApplyPhoto[1]);
+    const hh = await db.prepare('SELECT photo_url FROM households WHERE id=?').bind(hid).first();
+    if (!hh) return json({ error: 'Household not found' }, 404);
+    const photoUrl = hh.photo_url || '';
+    if (!photoUrl) return json({ ok: false, error: 'Household has no photo' }, 400);
+    const r = await db.prepare(
+      `UPDATE people SET photo_url=?
+       WHERE household_id=? AND active=1 AND COALESCE(photo_url,'')=''`
+    ).bind(photoUrl, hid).run();
+    return json({ ok: true, updated: r.meta?.changes ?? 0 });
+  }
+
+  // ── Apply household photo to members (all households, admin) ─────
+  // Single statement: every active member with no photo whose household
+  // has one inherits it. Members with existing photos are skipped.
+  if (seg === 'households/apply-photo-to-members-all' && method === 'POST') {
+    if (!isAdmin) return json({ error: 'Admin only' }, 403);
+    const r = await db.prepare(
+      `UPDATE people
+         SET photo_url = (SELECT h.photo_url FROM households h WHERE h.id = people.household_id)
+       WHERE active=1
+         AND COALESCE(photo_url,'')=''
+         AND household_id IS NOT NULL
+         AND EXISTS (
+           SELECT 1 FROM households h
+            WHERE h.id = people.household_id
+              AND COALESCE(h.photo_url,'') != ''
+         )`
+    ).run();
+    return json({ ok: true, updated: r.meta?.changes ?? 0 });
+  }
+
   // ── Organizations ────────────────────────────────────────────────
   // Returns both rows from the `organizations` table AND people whose
   // member_type is 'organization' — those person-records are otherwise

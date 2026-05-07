@@ -131,6 +131,8 @@ function openHouseholdEdit(h) {
   if (prevEl) { prevEl.src = photoUrl ? photoSrc(photoUrl) : ''; prevEl.style.display = photoUrl ? 'block' : 'none'; }
   var upBtn = document.getElementById('hm-photo-upload-btn');
   if (upBtn) upBtn.style.display = isNew ? 'none' : 'inline-flex';
+  var applyBtn = document.getElementById('hm-apply-photo-btn');
+  if (applyBtn) applyBtn.style.display = (!isNew && photoUrl) ? 'inline-flex' : 'none';
   document.getElementById('hm-del-btn').style.display = isNew ? 'none' : 'inline-flex';
   document.getElementById('hm-push-addr-row').style.display = isNew ? 'none' : '';
   var mc = document.getElementById('hm-members');
@@ -192,6 +194,24 @@ function hhPushAddress() {
     var n = r.updated || 0;
     if (n > 0) alert('Address pushed to ' + n + ' member' + (n !== 1 ? 's' : '') + ' who had no address on file.');
     else alert('All household members already have an address — nothing was changed.');
+  });
+}
+function applyHHPhotoToMembers() {
+  var id = document.getElementById('hm-id').value;
+  if (!id) return;
+  var photoUrl = document.getElementById('hm-photo').value;
+  if (!photoUrl) { alert('No household photo to apply — upload one first.'); return; }
+  api('/admin/api/households/' + id + '/apply-photo-to-members', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: '{}'
+  }).then(function(r) {
+    if (!r.ok) { alert('Error: ' + (r.error || 'unknown')); return; }
+    var n = r.updated || 0;
+    if (n > 0) {
+      alert('Photo applied to ' + n + ' family member' + (n !== 1 ? 's' : '') + ' who had no photo.');
+      loadHouseholds();
+    } else alert('All family members already have a photo — nothing was changed.');
   });
 }
 

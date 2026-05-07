@@ -331,6 +331,24 @@ function fixHouseholdHeads() {
     }
   }).catch(function(e) { status.textContent = 'Error: ' + e.message; status.className = 'import-status err'; });
 }
+function applyAllHouseholdPhotos() {
+  var status = document.getElementById('cascade-photos-status');
+  status.textContent = 'Working…'; status.className = 'import-status';
+  api('/admin/api/households/apply-photo-to-members-all', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: '{}'
+  }).then(function(d) {
+    if (d.ok) {
+      var n = d.updated || 0;
+      status.textContent = 'Updated ' + n + ' member' + (n === 1 ? '' : 's') + '.';
+      status.className = 'import-status ok';
+    } else {
+      status.textContent = 'Error: ' + (d.error||'unknown');
+      status.className = 'import-status err';
+    }
+  }).catch(function(e) { status.textContent = 'Error: ' + e.message; status.className = 'import-status err'; });
+}
 function bulkValidateAddresses() {
   var btn = document.getElementById('bulk-validate-addr-btn');
   var status = document.getElementById('bulk-validate-addr-status');
