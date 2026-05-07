@@ -356,6 +356,21 @@ function pmReadDate(inputId, cbId) {
   }
   return v;
 }
+// When a "Year unknown" checkbox is checked and its date input is empty,
+// drop in today's month/day with a 2000 placeholder year so save has
+// something to work with. User can then adjust the day/month in the picker.
+function pmYearUnknownChanged(cbId, inputId) {
+  var cb = document.getElementById(cbId);
+  var inp = document.getElementById(inputId);
+  if (!cb || !inp) return;
+  if (cb.checked && !inp.value) {
+    var t = new Date();
+    var mm = String(t.getMonth() + 1).padStart(2, '0');
+    var dd = String(t.getDate()).padStart(2, '0');
+    inp.value = '2000-' + mm + '-' + dd;
+    inp.focus();
+  }
+}
 // Render a field-card date input with paired "Year unknown" checkbox.
 // Used by the inline Demographics editor on the profile page.
 function pedDateField(idBase, label, val) {
@@ -365,7 +380,7 @@ function pedDateField(idBase, label, val) {
   return '<div class="pv-field-card"><label for="' + idBase + '" class="pv-field-card-lbl">' + label + '</label>'
     + '<input type="date" id="' + idBase + '" value="' + esc(displayVal) + '" style="' + inp + '">'
     + '<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--warm-gray);margin-top:3px;cursor:pointer;">'
-    + '<input type="checkbox" id="' + idBase + '-noyear"' + (noYear ? ' checked' : '') + '> Year unknown</label></div>';
+    + '<input type="checkbox" id="' + idBase + '-noyear"' + (noYear ? ' checked' : '') + ' onchange="pmYearUnknownChanged(\'' + idBase + '-noyear\',\'' + idBase + '\')"> Year unknown</label></div>';
 }
 function calcAge(ds) {
   if (!ds) return '';
