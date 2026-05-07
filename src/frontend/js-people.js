@@ -405,9 +405,9 @@ function showProfile(p) {
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div class="pv-section-title" style="margin:0;">Contact'+dirBadge+'</div>'
       + '<button class="btn-secondary require-edit" style="font-size:.7rem;padding:2px 8px;" onclick="pvEditContact()">Edit</button></div>'
       + pvRow('Address', addrVal)
-      + pvRow('Phone', phoneVal + (p.phone ? (p.sms_opt_in
-          ? ' <span title="SMS opt-in" style="margin-left:6px;display:inline-block;font-size:10px;padding:1px 7px;border-radius:99px;background:#e8f3ec;color:#3a7a55;font-weight:600;">SMS ✓</span>'
-          : ' <span title="SMS not opted in" style="margin-left:6px;display:inline-block;font-size:10px;padding:1px 7px;border-radius:99px;background:#f0eee8;color:#998877;font-weight:600;">SMS off</span>') : ''))
+      + pvRow('Phone', phoneVal + (p.phone && _userRole !== 'member' ? (p.sms_opt_in
+          ? ' <span id="pv-sms-badge" onclick="togglePVSms()" title="Click to opt out of SMS" style="cursor:pointer;margin-left:6px;display:inline-block;font-size:10px;padding:1px 7px;border-radius:99px;background:#e8f3ec;color:#3a7a55;font-weight:600;">SMS ✓</span>'
+          : ' <span id="pv-sms-badge" onclick="togglePVSms()" title="Click to opt in to SMS" style="cursor:pointer;margin-left:6px;display:inline-block;font-size:10px;padding:1px 7px;border-radius:99px;background:#f0eee8;color:#998877;font-weight:600;">SMS off</span>') : (p.phone && p.sms_opt_in ? ' <span style="margin-left:6px;display:inline-block;font-size:10px;padding:1px 7px;border-radius:99px;background:#e8f3ec;color:#3a7a55;font-weight:600;">SMS ✓</span>' : '')))
       + pvRow('Email', emailVal)
       + (p.email && _userRole !== 'member' ? '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">'
           + '<button class="btn-secondary" style="font-size:.75rem;padding:3px 9px;" onclick="addToNewsletter('+p.id+',\''+esc(p.email)+'\',\''+esc(p.first_name||'')+'\',\''+esc(p.last_name||'')+'\')">&#9993; Add to Newsletter</button>'
@@ -965,6 +965,33 @@ function handlePhotoFileSelected(input) {
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+function togglePVSms() {
+  var p = _currentPvPerson;
+  if (!p) return;
+  var nextOptIn = p.sms_opt_in ? 0 : 1;
+  api('/admin/api/people/bulk-comm-opt', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ ids: [p.id], sms: nextOptIn ? 'in' : 'out' })
+  }).then(function(r) {
+    if (!r.ok) { alert('Error: ' + (r.error || 'unknown')); return; }
+    p.sms_opt_in = nextOptIn;
+    var badge = document.getElementById('pv-sms-badge');
+    if (badge) {
+      if (nextOptIn) {
+        badge.style.background = '#e8f3ec';
+        badge.style.color = '#3a7a55';
+        badge.textContent = 'SMS ✓';
+        badge.title = 'Click to opt out of SMS';
+      } else {
+        badge.style.background = '#f0eee8';
+        badge.style.color = '#998877';
+        badge.textContent = 'SMS off';
+        badge.title = 'Click to opt in to SMS';
+      }
+    }
+  });
 }
 function openPVPhotoPicker() {
   var p = _currentPvPerson;
