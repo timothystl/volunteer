@@ -755,6 +755,46 @@ if (seg === 'reports/giving-summary' && method === 'GET') {
   });
 }
 
+// Compare our per-fund totals against Breeze's giving/list for the same window.
+// Returns Breeze totals keyed by fund_breeze_id and fund_name; the frontend
+// joins these against the giving-summary rows to surface deltas.
+if (seg === 'reports/giving-by-fund-breeze' && method === 'GET') { try {
+  const breeze = makeBreezeClient(env);
+  if (!breeze) return json({ error: 'Breeze not configured' }, 503);
+  const from = url.searchParams.get('from') || '';
+  const to   = url.searchParams.get('to')   || '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
+    return json({ error: 'from and to (YYYY-MM-DD) required' }, 400);
+  }
+  const glRes = await breeze.givingList({ start: from, end: to, details: 1, limit: 10000 });
+  if (!glRes.ok) return json({ error: 'Breeze API error: ' + glRes.status }, 502);
+  const payments = await glRes.json();
+  if (!Array.isArray(payments)) return json({ error: 'Breeze returned invalid JSON' }, 502);
+  const byFund = new Map(); // fund_breeze_id -> { fund_breeze_id, fund_name, total_cents, count }
+  let truncated = false;
+  if (payments.length >= 10000) truncated = true;
+  for (const p of payments) {
+    const paid = (p.paid_on || p.date || '').slice(0, 10);
+    if (paid && (paid < from || paid > to)) continue; // safety: 45-day pre-window pulled
+    const splits = Array.isArray(p.funds) ? p.funds : [];
+    if (splits.length === 0) continue;
+    for (const f of splits) {
+      const fid = String(f.id || f.fund_id || '');
+      const name = f.name || f.fund_name || '(no fund)';
+      // Breeze amounts come as decimal strings; convert to cents.
+      const amt = Math.round(parseFloat(f.amount || f.tax_deductible || '0') * 100) || 0;
+      const key = fid || name;
+      let row = byFund.get(key);
+      if (!row) { row = { fund_breeze_id: fid, fund_name: name, total_cents: 0, count: 0 }; byFund.set(key, row); }
+      row.total_cents += amt;
+      row.count += 1;
+    }
+  }
+  const rows = [...byFund.values()].sort((a, b) => b.total_cents - a.total_cents);
+  const grand = rows.reduce((s, r) => s + r.total_cents, 0);
+  return json({ from, to, rows, grand_total_cents: grand, payment_count: payments.length, truncated });
+} catch (e) { return json({ error: 'Breeze compare error: ' + e.message }, 500); } }
+
 // Standalone orphan cleanup: find DB entries whose breeze_id no longer exists in Breeze
 // for a given date range and remove them (same safety check as the sync orphan pass).
 if (seg === 'giving/reconcile-orphans' && method === 'POST') { try {

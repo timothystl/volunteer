@@ -548,6 +548,11 @@ async function _doInitDb(db) {
   // Normalize member_type to lowercase so frontend comparisons are consistent
   await db.prepare("UPDATE people SET member_type=LOWER(member_type) WHERE member_type != LOWER(member_type)").run().catch(() => {});
 
+  // Backfill baptized/confirmed booleans from existing dates (RI2 — earlier Breeze imports
+  // wrote the date columns but never set the booleans the sacramental pipeline reads).
+  await db.prepare("UPDATE people SET baptized=1 WHERE baptized=0 AND baptism_date != ''").run().catch(() => {});
+  await db.prepare("UPDATE people SET confirmed=1 WHERE confirmed=0 AND confirmation_date != ''").run().catch(() => {});
+
   await seedEvents(db);
   await migrateChristmasMarketRoles(db);
   await seedChmsDefaults(db);
