@@ -29,7 +29,29 @@ export const HTML_TABS_1 = String.raw`<!-- ═══ HOME / DASHBOARD TAB ══
     </select>
     <button class="btn-sm" onclick="applyBulkMemberType()" style="background:#fff;color:var(--steel-anchor);">Apply</button>
     <button class="btn-sm" onclick="openBulkTagsPanel()" style="background:#fff;color:var(--steel-anchor);">&#9881; Tags</button>
+    <button class="btn-sm" onclick="openBulkCommPanel()" style="background:#fff;color:var(--steel-anchor);">&#9993; Comms</button>
     <button class="btn-sm" onclick="clearSelection()" style="background:rgba(255,255,255,.2);color:#fff;">Cancel</button>
+  </div>
+  <!-- Bulk communications opt-in/out mini-panel -->
+  <div id="p-bulk-comm-panel" style="display:none;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:4px 0 8px;">
+    <div style="font-size:.78rem;font-weight:700;color:var(--warm-gray);text-transform:uppercase;margin-bottom:8px;">Bulk Communications Opt-In</div>
+    <div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:12px;">
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:.88rem;">
+        <div style="font-weight:700;color:var(--charcoal);">SMS (text messages)</div>
+        <label><input type="radio" name="bulk-sms" value=""    checked> No change</label>
+        <label><input type="radio" name="bulk-sms" value="in">  Opt-in</label>
+        <label><input type="radio" name="bulk-sms" value="out"> Opt-out</label>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:.88rem;">
+        <div style="font-weight:700;color:var(--charcoal);">Newsletter (Brevo)</div>
+        <label><input type="radio" name="bulk-news" value=""    checked> No change</label>
+        <label><input type="radio" name="bulk-news" value="add"> Add to list (requires email)</label>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary" style="font-size:.82rem;padding:5px 12px;" onclick="applyBulkComm()">Apply</button>
+      <button class="btn-secondary" style="font-size:.82rem;padding:5px 12px;" onclick="document.getElementById(&#39;p-bulk-comm-panel&#39;).style.display=&#39;none&#39;">Cancel</button>
+    </div>
   </div>
   <!-- Bulk tags mini-panel -->
   <div id="p-bulk-tags-panel" style="display:none;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:4px 0 8px;">
@@ -664,6 +686,7 @@ export const HTML_TABS_2 = String.raw`
         <div class="pv-photo-upload-overlay require-edit" id="pv-photo-overlay" onclick="triggerPhotoUpload()" title="Upload photo" style="display:none;">
           <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="white" stroke-width="1.8"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </div>
+        <button type="button" id="pv-photo-remove-btn" class="require-edit" onclick="removePersonPhoto()" title="Remove photo" style="display:none;position:absolute;top:-4px;right:-4px;width:22px;height:22px;border-radius:50%;border:none;background:var(--clay-red);color:white;font-size:14px;line-height:1;cursor:pointer;padding:0;box-shadow:0 1px 3px rgba(0,0,0,.3);">&times;</button>
       </div>
       <input type="file" id="pv-photo-input" accept="image/*" style="display:none;" onchange="handlePhotoFileSelected(this)">
       <div class="pv-hdr-info">

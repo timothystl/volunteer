@@ -156,6 +156,25 @@ if (seg === 'people' && method === 'GET') {
     '65_plus':`(p.dob != '' AND p.dob IS NOT NULL AND (julianday('now')-julianday(p.dob))/365.25 >= 65)`,
   };
   if (ageRangeClauses[ageRange]) where += ' AND ' + ageRangeClauses[ageRange];
+  // Household size filter (matches People Insights buckets)
+  const hhSize = url.searchParams.get('household_size') || '';
+  const hhSizeClauses = {
+    single:       `(SELECT COUNT(*) FROM people ps WHERE ps.household_id=p.household_id AND ps.active=1) = 1`,
+    couple:       `(SELECT COUNT(*) FROM people ps WHERE ps.household_id=p.household_id AND ps.active=1) = 2`,
+    small:        `(SELECT COUNT(*) FROM people ps WHERE ps.household_id=p.household_id AND ps.active=1) BETWEEN 3 AND 4`,
+    large:        `(SELECT COUNT(*) FROM people ps WHERE ps.household_id=p.household_id AND ps.active=1) >= 5`,
+    no_household: `(p.household_id IS NULL OR p.household_id=0)`,
+  };
+  if (hhSizeClauses[hhSize]) where += ' AND ' + hhSizeClauses[hhSize];
+  // Baptism & Confirmation status filter
+  const sacrament = url.searchParams.get('sacrament') || '';
+  const sacramentClauses = {
+    both:            `(p.baptized=1 AND p.confirmed=1)`,
+    baptized_only:   `(p.baptized=1 AND p.confirmed=0)`,
+    confirmed_only:  `(p.baptized=0 AND p.confirmed=1)`,
+    neither:         `(p.baptized=0 AND p.confirmed=0)`,
+  };
+  if (sacramentClauses[sacrament]) where += ' AND ' + sacramentClauses[sacrament];
   // Total count
   const countRow = await db.prepare(`SELECT COUNT(*) as n FROM people p WHERE ${where}`).bind(...binds).first();
   const total = countRow?.n || 0;
@@ -243,6 +262,50 @@ if (seg === 'people/bulk-member-type' && method === 'POST') {
   const placeholders = ids.map(() => '?').join(',');
   await db.prepare(`UPDATE people SET member_type=? WHERE id IN (${placeholders})`).bind(mt, ...ids).run();
   return json({ ok: true, updated: ids.length });
+}
+
+// Bulk communications opt-in: flips sms_opt_in and/or pushes addresses to Brevo
+// in a single call. body: { ids: [], sms: 'in'|'out'|null, newsletter: 'add'|null }
+if (seg === 'people/bulk-comm-opt' && method === 'POST') {
+  if (!isStaff) return json({ error: 'Insufficient permissions' }, 403);
+  let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
+  const sms = b.sms === 'in' ? 1 : b.sms === 'out' ? 0 : null;
+  const newsletter = b.newsletter === 'add';
+  if (!ids.length) return json({ error: 'ids required' }, 400);
+  if (sms === null && !newsletter) return json({ error: 'no action selected' }, 400);
+  const result = { ids: ids.length, sms_updated: 0, newsletter_added: 0, newsletter_skipped_no_email: 0, newsletter_error: '' };
+  // Chunk to stay under D1's ~100 param limit
+  const CHUNK = 90;
+  if (sms !== null) {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const r = await db.prepare(`UPDATE people SET sms_opt_in=?, locally_edited=1 WHERE id IN (${ph})`).bind(sms, ...chunk).run();
+      result.sms_updated += r.meta?.changes ?? 0;
+    }
+  }
+  if (newsletter) {
+    const contacts = [];
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const rows = (await db.prepare(
+        `SELECT id, first_name, last_name, email FROM people WHERE id IN (${ph})`
+      ).bind(...chunk).all()).results || [];
+      for (const r of rows) {
+        const em = (r.email || '').trim();
+        if (!em) { result.newsletter_skipped_no_email++; continue; }
+        contacts.push({ email: em, firstName: r.first_name || '', lastName: r.last_name || '' });
+      }
+    }
+    if (contacts.length) {
+      const sync = await brevoBulkSync(env, contacts);
+      if (sync.ok) result.newsletter_added = contacts.length;
+      else result.newsletter_error = sync.error || 'unknown';
+    }
+  }
+  return json({ ok: true, ...result });
 }
 
 const pmatch = seg.match(/^people\/(\d+)$/);
@@ -512,6 +575,26 @@ if (photoMatch && method === 'POST') {
   const photoUrl = `/admin/r2photo/${r2Key}`;
   await db.prepare('UPDATE people SET photo_url=? WHERE id=?').bind(photoUrl, pid).run();
   return json({ ok: true, photo_url: photoUrl });
+}
+// Remove a person's photo: clears photo_url and deletes any R2 objects under
+// people/{pid}/ and people/breeze_*/ for this person. Sync no longer
+// re-populates because locally_edited=1 is set on every profile save.
+if (photoMatch && method === 'DELETE') {
+  if (!isStaff) return json({ error: 'Insufficient permissions' }, 403);
+  const pid = parseInt(photoMatch[1]);
+  const row = await db.prepare('SELECT photo_url, breeze_id FROM people WHERE id=?').bind(pid).first();
+  if (!row) return json({ error: 'Person not found' }, 404);
+  await db.prepare('UPDATE people SET photo_url=?, locally_edited=1 WHERE id=?').bind('', pid).run();
+  if (env.PHOTOS) {
+    const keys = [
+      `people/${pid}/photo.jpg`,
+      `people/${pid}/photo.png`,
+      `people/${pid}/photo.webp`,
+    ];
+    if (row.breeze_id) keys.push(`people/breeze_${row.breeze_id}/photo.jpg`);
+    for (const k of keys) { try { await env.PHOTOS.delete(k); } catch {} }
+  }
+  return json({ ok: true });
 }
 
 // ── Household photo upload ───────────────────────────────────────

@@ -27,6 +27,8 @@ function loadPeople(resetPage) {
   if (peopleFilter.missingFields && peopleFilter.missingFields.length) params.set('missing_fields', peopleFilter.missingFields.join(','));
   if (peopleFilter.gender) params.set('gender', peopleFilter.gender);
   if (peopleFilter.ageRange) params.set('age_range', peopleFilter.ageRange);
+  if (peopleFilter.householdSize) params.set('household_size', peopleFilter.householdSize);
+  if (peopleFilter.sacrament) params.set('sacrament', peopleFilter.sacrament);
   params.set('limit', peopleFilter.limit);
   params.set('offset', peopleFilter.offset);
   params.set('sort', peopleFilter.sort || 'last_name');
@@ -222,6 +224,44 @@ function openBulkTagsPanel() {
   var panel = document.getElementById('p-bulk-tags-panel');
   if (panel) panel.style.display = '';
 }
+function openBulkCommPanel() {
+  if (!_selectedPeople.size) { alert('No people selected.'); return; }
+  // Reset the form each time
+  document.querySelectorAll('input[name="bulk-sms"]').forEach(function(r){ r.checked = (r.value === ''); });
+  document.querySelectorAll('input[name="bulk-news"]').forEach(function(r){ r.checked = (r.value === ''); });
+  var panel = document.getElementById('p-bulk-comm-panel');
+  if (panel) panel.style.display = '';
+}
+function applyBulkComm() {
+  if (!_selectedPeople.size) { alert('No people selected.'); return; }
+  var sms = (document.querySelector('input[name="bulk-sms"]:checked')||{}).value || '';
+  var news = (document.querySelector('input[name="bulk-news"]:checked')||{}).value || '';
+  if (!sms && !news) {
+    document.getElementById('p-bulk-comm-panel').style.display = 'none';
+    return;
+  }
+  var ids = Array.from(_selectedPeople);
+  var body = { ids: ids };
+  if (sms)  body.sms = sms;
+  if (news) body.newsletter = news;
+  api('/admin/api/people/bulk-comm-opt', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  }).then(function(r) {
+    document.getElementById('p-bulk-comm-panel').style.display = 'none';
+    if (!r.ok) { alert('Error: ' + (r.error || 'unknown')); return; }
+    var msg = [];
+    if (sms) msg.push('SMS ' + (sms === 'in' ? 'opt-in' : 'opt-out') + ' set on ' + r.sms_updated + ' people.');
+    if (news) {
+      msg.push('Newsletter: added ' + r.newsletter_added + (r.newsletter_skipped_no_email ? ' (skipped ' + r.newsletter_skipped_no_email + ' with no email)' : '') + '.');
+      if (r.newsletter_error) msg.push('Newsletter error: ' + r.newsletter_error);
+    }
+    alert(msg.join('\n'));
+    clearSelection();
+    loadPeople();
+  });
+}
 function applyBulkTags() {
   if (!_selectedPeople.size) { alert('No people selected.'); return; }
   var adds = [], removes = [];
@@ -309,6 +349,8 @@ function showProfile(p) {
     }
     var overlayEl = document.getElementById('pv-photo-overlay');
     if (overlayEl) overlayEl.style.display = (_userRole !== 'member') ? 'flex' : 'none';
+    var rmBtn = document.getElementById('pv-photo-remove-btn');
+    if (rmBtn) rmBtn.style.display = (p.photo_url && _userRole !== 'member') ? 'block' : 'none';
   }
   var fnEl = document.getElementById('pv-fullname');
   if (fnEl) fnEl.textContent = displayName;
@@ -896,6 +938,25 @@ function handlePhotoFileSelected(input) {
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+function removePersonPhoto() {
+  var pid = _currentPvPerson && _currentPvPerson.id;
+  if (!pid) return;
+  if (!confirm('Remove this person’s photo? Initials will show until you upload a new one.')) return;
+  fetch('/admin/api/people/' + pid + '/photo', { method: 'DELETE', credentials: 'same-origin' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d || !d.ok) { alert('Remove failed: ' + ((d && d.error) || 'unknown error')); return; }
+      _currentPvPerson.photo_url = '';
+      var photoEl = document.getElementById('pv-photo');
+      if (photoEl) {
+        var initialsTxt = ((_currentPvPerson.first_name||'').charAt(0) + (_currentPvPerson.last_name||'').charAt(0)).toUpperCase();
+        photoEl.innerHTML = '<span style="color:white;font-size:24px;font-weight:600;line-height:1;">' + initialsTxt + '</span>';
+      }
+      var rmBtn = document.getElementById('pv-photo-remove-btn');
+      if (rmBtn) rmBtn.style.display = 'none';
+    })
+    .catch(function() { alert('Remove failed. Please try again.'); });
 }
 function uploadPersonPhoto(blob) {
   var pid = _currentPvPerson && _currentPvPerson.id;
