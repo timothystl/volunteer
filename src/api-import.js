@@ -2410,7 +2410,9 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
      household_id      = CASE WHEN ? IS NOT NULL THEN ? ELSE household_id END,
      dob               = CASE WHEN ? != '' THEN ? ELSE dob               END,
      baptism_date      = CASE WHEN ? != '' THEN ? ELSE baptism_date      END,
+     baptized          = CASE WHEN ? != '' THEN 1 ELSE baptized          END,
      confirmation_date = CASE WHEN ? != '' THEN ? ELSE confirmation_date END,
+     confirmed         = CASE WHEN ? != '' THEN 1 ELSE confirmed         END,
      anniversary_date  = CASE WHEN ? != '' THEN ? ELSE anniversary_date  END,
      gender            = CASE WHEN ? != '' THEN ? ELSE gender            END,
      marital_status    = CASE WHEN ? != '' THEN ? ELSE marital_status    END,
@@ -2423,7 +2425,7 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
     fn,fn, ln,ln, email,email, phone,phone,
     addr.street,addr.street, addr.city,addr.city, addr.state,addr.state, addr.zip,addr.zip,
     memberType,memberType, familyRole,familyRole, householdId,householdId,
-    dob,dob, baptismDate,baptismDate, confirmDate,confirmDate, anniversaryDate,anniversaryDate,
+    dob,dob, baptismDate,baptismDate,baptismDate, confirmDate,confirmDate,confirmDate, anniversaryDate,anniversaryDate,
     gender,gender, maritalStatus,maritalStatus, photoUrl,photoUrl,
     deceasedFlag, deathDate,deathDate, envelopeNumber,envelopeNumber,
     breezeId
@@ -2774,7 +2776,9 @@ if (seg === 'import/breeze' && method === 'POST') { try {
            address1=?,city=?,state=?,zip=?,member_type=?,household_id=?,
            dob=COALESCE(NULLIF(?,''),dob),
            baptism_date=COALESCE(NULLIF(?,''),baptism_date),
+           baptized=CASE WHEN ?!='' THEN 1 ELSE baptized END,
            confirmation_date=COALESCE(NULLIF(?,''),confirmation_date),
+           confirmed=CASE WHEN ?!='' THEN 1 ELSE confirmed END,
            anniversary_date=COALESCE(NULLIF(?,''),anniversary_date),
            family_role=?,
            photo_url=COALESCE(NULLIF(?,''),photo_url),
@@ -2786,18 +2790,18 @@ if (seg === 'import/breeze' && method === 'POST') { try {
            active=1
            WHERE breeze_id=?`
         ).bind(fn,ln,email,phone,addr.street,addr.city,addr.state,addr.zip,memberType,householdId,
-               dob,baptismDate,confirmDate,anniversaryDate,familyRole,
+               dob,baptismDate,baptismDate,confirmDate,confirmDate,anniversaryDate,familyRole,
                photoUrl,gender,maritalStatus,deceasedFlag,deathDate,envelopeNumber,String(p.id)).run();
         updated++;
       } else {
         await db.prepare(
           `INSERT INTO people
            (first_name,last_name,email,phone,address1,city,state,zip,breeze_id,member_type,
-            household_id,dob,baptism_date,confirmation_date,anniversary_date,family_role,photo_url,
+            household_id,dob,baptism_date,baptized,confirmation_date,confirmed,anniversary_date,family_role,photo_url,
             gender,marital_status,deceased,death_date,envelope_number)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         ).bind(fn,ln,email,phone,addr.street,addr.city,addr.state,addr.zip,String(p.id),memberType,
-               householdId,dob,baptismDate,confirmDate,anniversaryDate,familyRole,photoUrl,
+               householdId,dob,baptismDate,baptismDate?1:0,confirmDate,confirmDate?1:0,anniversaryDate,familyRole,photoUrl,
                gender,maritalStatus,deceasedFlag,deathDate,envelopeNumber).run();
         imported++;
       }
