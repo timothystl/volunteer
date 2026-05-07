@@ -353,6 +353,8 @@ function showProfile(p) {
     if (rmBtn) rmBtn.style.display = (p.photo_url && _userRole !== 'member') ? 'block' : 'none';
     var rcBtn = document.getElementById('pv-photo-recrop-btn');
     if (rcBtn) rcBtn.style.display = (p.photo_url && _userRole !== 'member') ? 'block' : 'none';
+    var pkBtn = document.getElementById('pv-photo-pick-btn');
+    if (pkBtn) pkBtn.style.display = (p.household_id && _userRole !== 'member') ? 'block' : 'none';
   }
   var fnEl = document.getElementById('pv-fullname');
   if (fnEl) fnEl.textContent = displayName;
@@ -403,7 +405,9 @@ function showProfile(p) {
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div class="pv-section-title" style="margin:0;">Contact'+dirBadge+'</div>'
       + '<button class="btn-secondary require-edit" style="font-size:.7rem;padding:2px 8px;" onclick="pvEditContact()">Edit</button></div>'
       + pvRow('Address', addrVal)
-      + pvRow('Phone', phoneVal)
+      + pvRow('Phone', phoneVal + (p.phone ? (p.sms_opt_in
+          ? ' <span title="SMS opt-in" style="margin-left:6px;display:inline-block;font-size:10px;padding:1px 7px;border-radius:99px;background:#e8f3ec;color:#3a7a55;font-weight:600;">SMS ✓</span>'
+          : ' <span title="SMS not opted in" style="margin-left:6px;display:inline-block;font-size:10px;padding:1px 7px;border-radius:99px;background:#f0eee8;color:#998877;font-weight:600;">SMS off</span>') : ''))
       + pvRow('Email', emailVal)
       + (p.email && _userRole !== 'member' ? '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">'
           + '<button class="btn-secondary" style="font-size:.75rem;padding:3px 9px;" onclick="addToNewsletter('+p.id+',\''+esc(p.email)+'\',\''+esc(p.first_name||'')+'\',\''+esc(p.last_name||'')+'\')">&#9993; Add to Newsletter</button>'
@@ -961,6 +965,71 @@ function handlePhotoFileSelected(input) {
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+function openPVPhotoPicker() {
+  var p = _currentPvPerson;
+  if (!p || !p.household_id) {
+    alert('This person has no household, so there are no family photos to pick from.');
+    return;
+  }
+  api('/admin/api/households/' + p.household_id).then(function(h) {
+    var tiles = [];
+    if (h && h.photo_url) {
+      tiles.push({ url: h.photo_url, name: h.name || 'Household photo', sub: 'Household photo' });
+    }
+    (h && h.members ? h.members : []).forEach(function(m) {
+      if (!m.photo_url) return;
+      if (m.id === p.id) return; // skip self
+      tiles.push({
+        url: m.photo_url,
+        name: ((m.first_name||'') + ' ' + (m.last_name||'')).trim() || 'Member',
+        sub: m.family_role || ''
+      });
+    });
+    if (!tiles.length) {
+      alert('No household members have a photo on their profile yet, and the household has no photo set.');
+      return;
+    }
+    var list = document.getElementById('pv-photo-pick-list');
+    list.innerHTML = tiles.map(function(t, i) {
+      return '<div data-pvpidx="' + i + '" onclick="usePVPhotoFrom(' + i + ')" style="cursor:pointer;width:120px;text-align:center;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--white);">'
+        + '<img src="' + esc(photoSrc(t.url)) + '" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:50%;display:block;margin:0 auto 6px;">'
+        + '<div style="font-size:.85rem;font-weight:600;color:var(--charcoal);">' + esc(t.name) + '</div>'
+        + '<div style="font-size:.72rem;color:var(--warm-gray);text-transform:capitalize;">' + esc(t.sub) + '</div>'
+        + '</div>';
+    }).join('');
+    _pvPickerTiles = tiles;
+    openModal('pv-photo-pick-modal');
+  });
+}
+var _pvPickerTiles = [];
+function usePVPhotoFrom(idx) {
+  var p = _currentPvPerson;
+  var t = _pvPickerTiles[idx];
+  if (!p || !t) return;
+  fetch('/admin/api/people/' + p.id + '/photo', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    credentials: 'same-origin',
+    body: JSON.stringify({ photo_url: t.url })
+  }).then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d || !d.ok) { alert('Could not apply photo: ' + ((d && d.error) || 'unknown')); return; }
+      closeModal('pv-photo-pick-modal');
+      _currentPvPerson.photo_url = d.photo_url;
+      var photoEl = document.getElementById('pv-photo');
+      if (photoEl) {
+        var imgEl = document.createElement('img');
+        imgEl.src = photoSrc(d.photo_url) + '?t=' + Date.now();
+        imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;';
+        photoEl.innerHTML = '';
+        photoEl.appendChild(imgEl);
+      }
+      var rmBtn = document.getElementById('pv-photo-remove-btn');
+      if (rmBtn) rmBtn.style.display = 'block';
+      var rcBtn = document.getElementById('pv-photo-recrop-btn');
+      if (rcBtn) rcBtn.style.display = 'block';
+    });
 }
 function recropPersonPhoto() {
   var p = _currentPvPerson;
