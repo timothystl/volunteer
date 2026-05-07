@@ -148,12 +148,14 @@ if (seg === 'people' && method === 'GET') {
   }
   // Positive age range filter
   const ageRange = url.searchParams.get('age_range') || '';
+  // Exclude year-unknown sentinel ('0001-MM-DD') from age math — those dates
+  // have no computable age and would always land in the oldest bucket otherwise.
   const ageRangeClauses = {
-    under_18: `(p.dob != '' AND p.dob IS NOT NULL AND (julianday('now')-julianday(p.dob))/365.25 < 18)`,
-    '18_29':  `(p.dob != '' AND p.dob IS NOT NULL AND (julianday('now')-julianday(p.dob))/365.25 >= 18 AND (julianday('now')-julianday(p.dob))/365.25 < 30)`,
-    '30_44':  `(p.dob != '' AND p.dob IS NOT NULL AND (julianday('now')-julianday(p.dob))/365.25 >= 30 AND (julianday('now')-julianday(p.dob))/365.25 < 45)`,
-    '45_64':  `(p.dob != '' AND p.dob IS NOT NULL AND (julianday('now')-julianday(p.dob))/365.25 >= 45 AND (julianday('now')-julianday(p.dob))/365.25 < 65)`,
-    '65_plus':`(p.dob != '' AND p.dob IS NOT NULL AND (julianday('now')-julianday(p.dob))/365.25 >= 65)`,
+    under_18: `(p.dob != '' AND p.dob IS NOT NULL AND p.dob NOT LIKE '0001-%' AND (julianday('now')-julianday(p.dob))/365.25 < 18)`,
+    '18_29':  `(p.dob != '' AND p.dob IS NOT NULL AND p.dob NOT LIKE '0001-%' AND (julianday('now')-julianday(p.dob))/365.25 >= 18 AND (julianday('now')-julianday(p.dob))/365.25 < 30)`,
+    '30_44':  `(p.dob != '' AND p.dob IS NOT NULL AND p.dob NOT LIKE '0001-%' AND (julianday('now')-julianday(p.dob))/365.25 >= 30 AND (julianday('now')-julianday(p.dob))/365.25 < 45)`,
+    '45_64':  `(p.dob != '' AND p.dob IS NOT NULL AND p.dob NOT LIKE '0001-%' AND (julianday('now')-julianday(p.dob))/365.25 >= 45 AND (julianday('now')-julianday(p.dob))/365.25 < 65)`,
+    '65_plus':`(p.dob != '' AND p.dob IS NOT NULL AND p.dob NOT LIKE '0001-%' AND (julianday('now')-julianday(p.dob))/365.25 >= 65)`,
   };
   if (ageRangeClauses[ageRange]) where += ' AND ' + ageRangeClauses[ageRange];
   // Household size filter (matches People Insights buckets)
@@ -262,6 +264,36 @@ if (seg === 'people/bulk-member-type' && method === 'POST') {
   const placeholders = ids.map(() => '?').join(',');
   await db.prepare(`UPDATE people SET member_type=? WHERE id IN (${placeholders})`).bind(mt, ...ids).run();
   return json({ ok: true, updated: ids.length });
+}
+
+// Bulk-mark baptized / confirmed flags (date-unknown). Body: {ids, baptized: 'set'|'unset', confirmed: 'set'|'unset'}
+if (seg === 'people/bulk-sacrament' && method === 'POST') {
+  if (!isStaff) return json({ error: 'Insufficient permissions' }, 403);
+  let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
+  const bap = b.baptized === 'set' ? 1 : b.baptized === 'unset' ? 0 : null;
+  const con = b.confirmed === 'set' ? 1 : b.confirmed === 'unset' ? 0 : null;
+  if (!ids.length) return json({ error: 'ids required' }, 400);
+  if (bap === null && con === null) return json({ error: 'no action selected' }, 400);
+  const result = { ids: ids.length, baptized_updated: 0, confirmed_updated: 0 };
+  const CHUNK = 90;
+  if (bap !== null) {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const r = await db.prepare(`UPDATE people SET baptized=?, locally_edited=1 WHERE id IN (${ph})`).bind(bap, ...chunk).run();
+      result.baptized_updated += r.meta?.changes ?? 0;
+    }
+  }
+  if (con !== null) {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const r = await db.prepare(`UPDATE people SET confirmed=?, locally_edited=1 WHERE id IN (${ph})`).bind(con, ...chunk).run();
+      result.confirmed_updated += r.meta?.changes ?? 0;
+    }
+  }
+  return json({ ok: true, ...result });
 }
 
 // Bulk communications opt-in: flips sms_opt_in and/or pushes addresses to Brevo
