@@ -532,6 +532,26 @@ if (photoMatch && method === 'POST') {
   await db.prepare('UPDATE people SET photo_url=? WHERE id=?').bind(photoUrl, pid).run();
   return json({ ok: true, photo_url: photoUrl });
 }
+// Remove a person's photo: clears photo_url and deletes any R2 objects under
+// people/{pid}/ and people/breeze_*/ for this person. Sync no longer
+// re-populates because locally_edited=1 is set on every profile save.
+if (photoMatch && method === 'DELETE') {
+  if (!isStaff) return json({ error: 'Insufficient permissions' }, 403);
+  const pid = parseInt(photoMatch[1]);
+  const row = await db.prepare('SELECT photo_url, breeze_id FROM people WHERE id=?').bind(pid).first();
+  if (!row) return json({ error: 'Person not found' }, 404);
+  await db.prepare('UPDATE people SET photo_url=?, locally_edited=1 WHERE id=?').bind('', pid).run();
+  if (env.PHOTOS) {
+    const keys = [
+      `people/${pid}/photo.jpg`,
+      `people/${pid}/photo.png`,
+      `people/${pid}/photo.webp`,
+    ];
+    if (row.breeze_id) keys.push(`people/breeze_${row.breeze_id}/photo.jpg`);
+    for (const k of keys) { try { await env.PHOTOS.delete(k); } catch {} }
+  }
+  return json({ ok: true });
+}
 
 // ── Household photo upload ───────────────────────────────────────
 const hhPhotoMatch = seg.match(/^households\/(\d+)\/photo$/);

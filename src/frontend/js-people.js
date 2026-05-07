@@ -311,6 +311,8 @@ function showProfile(p) {
     }
     var overlayEl = document.getElementById('pv-photo-overlay');
     if (overlayEl) overlayEl.style.display = (_userRole !== 'member') ? 'flex' : 'none';
+    var rmBtn = document.getElementById('pv-photo-remove-btn');
+    if (rmBtn) rmBtn.style.display = (p.photo_url && _userRole !== 'member') ? 'block' : 'none';
   }
   var fnEl = document.getElementById('pv-fullname');
   if (fnEl) fnEl.textContent = displayName;
@@ -898,6 +900,25 @@ function handlePhotoFileSelected(input) {
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+function removePersonPhoto() {
+  var pid = _currentPvPerson && _currentPvPerson.id;
+  if (!pid) return;
+  if (!confirm('Remove this person’s photo? Initials will show until you upload a new one.')) return;
+  fetch('/admin/api/people/' + pid + '/photo', { method: 'DELETE', credentials: 'same-origin' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d || !d.ok) { alert('Remove failed: ' + ((d && d.error) || 'unknown error')); return; }
+      _currentPvPerson.photo_url = '';
+      var photoEl = document.getElementById('pv-photo');
+      if (photoEl) {
+        var initialsTxt = ((_currentPvPerson.first_name||'').charAt(0) + (_currentPvPerson.last_name||'').charAt(0)).toUpperCase();
+        photoEl.innerHTML = '<span style="color:white;font-size:24px;font-weight:600;line-height:1;">' + initialsTxt + '</span>';
+      }
+      var rmBtn = document.getElementById('pv-photo-remove-btn');
+      if (rmBtn) rmBtn.style.display = 'none';
+    })
+    .catch(function() { alert('Remove failed. Please try again.'); });
 }
 function uploadPersonPhoto(blob) {
   var pid = _currentPvPerson && _currentPvPerson.id;

@@ -664,6 +664,7 @@ export const HTML_TABS_2 = String.raw`
         <div class="pv-photo-upload-overlay require-edit" id="pv-photo-overlay" onclick="triggerPhotoUpload()" title="Upload photo" style="display:none;">
           <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="white" stroke-width="1.8"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </div>
+        <button type="button" id="pv-photo-remove-btn" class="require-edit" onclick="removePersonPhoto()" title="Remove photo" style="display:none;position:absolute;top:-4px;right:-4px;width:22px;height:22px;border-radius:50%;border:none;background:var(--clay-red);color:white;font-size:14px;line-height:1;cursor:pointer;padding:0;box-shadow:0 1px 3px rgba(0,0,0,.3);">&times;</button>
       </div>
       <input type="file" id="pv-photo-input" accept="image/*" style="display:none;" onchange="handlePhotoFileSelected(this)">
       <div class="pv-hdr-info">
