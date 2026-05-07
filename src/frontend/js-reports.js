@@ -272,11 +272,43 @@ function runGivingByMethod() {
     );
   });
 }
+var _lastBreezeFundCompare = null;
+function compareBreezeFundTotals(from, to) {
+  var btn = document.getElementById('rpt-breeze-compare-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Fetching…'; }
+  api('/admin/api/reports/giving-by-fund-breeze?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to))
+    .then(function(d) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Compare Breeze'; }
+      if (d.error) { alert('Error: ' + d.error); return; }
+      if (d.truncated) alert('Breeze returned the maximum 10,000 payments — comparison may be partial.');
+      _lastBreezeFundCompare = d;
+      runGivingSummary();
+    });
+}
 function runGivingSummary() {
   var from = document.getElementById('rpt-from').value;
   var to = document.getElementById('rpt-to').value;
   if (!from || !to) { alert('Please select a date range.'); return; }
   api('/admin/api/reports/giving-summary?from=' + from + '&to=' + to).then(function(d) {
+    // Optional Breeze comparison: index Breeze rows by fund_name (case-insensitive, trimmed)
+    var bz = (_lastBreezeFundCompare && _lastBreezeFundCompare.from === from && _lastBreezeFundCompare.to === to)
+      ? _lastBreezeFundCompare : null;
+    var bzByName = {};
+    if (bz) (bz.rows||[]).forEach(function(r) { bzByName[(r.fund_name||'').trim().toLowerCase()] = r; });
+    function bzCell(name) {
+      if (!bz) return '';
+      var hit = bzByName[(name||'').trim().toLowerCase()];
+      return '<td style="text-align:right;color:var(--warm-gray);">' + (hit ? fmtMoney(hit.total_cents||0) : '—') + '</td>';
+    }
+    function deltaCell(appCents, name) {
+      if (!bz) return '';
+      var hit = bzByName[(name||'').trim().toLowerCase()];
+      if (!hit) return '<td style="text-align:right;color:var(--warm-gray);">—</td>';
+      var diff = (appCents||0) - (hit.total_cents||0);
+      var color = diff === 0 ? 'var(--moss-green)' : (Math.abs(diff) < 100 ? 'var(--warm-gray)' : 'var(--clay-red)');
+      var sign = diff > 0 ? '+' : '';
+      return '<td style="text-align:right;color:' + color + ';">' + sign + fmtMoney(diff) + '</td>';
+    }
     // Group funds by numeric prefix (e.g. "40085" from "40085 General Fund")
     var groups = {}, order = [];
     (d.rows||[]).forEach(function(r) {
@@ -286,23 +318,34 @@ function runGivingSummary() {
       groups[key].push(r);
     });
     var rows = '';
+    var hdrColspan = bz ? 5 : 3;
     order.forEach(function(key) {
       var grp = groups[key];
       var multipleInGroup = key && grp.length > 1;
       if (multipleInGroup) {
         var grpCents = grp.reduce(function(s,r){ return s+(r.total_cents||0); }, 0);
         var grpGifts = grp.reduce(function(s,r){ return s+(r.contributions||0); }, 0);
-        rows += '<tr class="rpt-group-hdr"><td colspan="3">' + esc(key) + '</td></tr>';
+        rows += '<tr class="rpt-group-hdr"><td colspan="' + hdrColspan + '">' + esc(key) + '</td></tr>';
         grp.forEach(function(r) {
-          rows += '<tr><td style="padding-left:22px;">' + esc(r.fund_name) + '</td><td style="text-align:right;">' + (r.contributions||0) + '</td><td style="text-align:right;">' + fmtMoney(r.total_cents||0) + '</td></tr>';
+          rows += '<tr><td style="padding-left:22px;">' + esc(r.fund_name) + '</td><td style="text-align:right;">' + (r.contributions||0) + '</td><td style="text-align:right;">' + fmtMoney(r.total_cents||0) + '</td>' + bzCell(r.fund_name) + deltaCell(r.total_cents, r.fund_name) + '</tr>';
         });
-        rows += '<tr class="rpt-group-sub"><td style="padding-left:22px;">Subtotal</td><td style="text-align:right;">' + grpGifts + '</td><td style="text-align:right;">' + fmtMoney(grpCents) + '</td></tr>';
+        rows += '<tr class="rpt-group-sub"><td style="padding-left:22px;">Subtotal</td><td style="text-align:right;">' + grpGifts + '</td><td style="text-align:right;">' + fmtMoney(grpCents) + '</td>' + (bz ? '<td></td><td></td>' : '') + '</tr>';
       } else {
         grp.forEach(function(r) {
-          rows += '<tr><td>' + esc(r.fund_name) + '</td><td style="text-align:right;">' + (r.contributions||0) + '</td><td style="text-align:right;">' + fmtMoney(r.total_cents||0) + '</td></tr>';
+          rows += '<tr><td>' + esc(r.fund_name) + '</td><td style="text-align:right;">' + (r.contributions||0) + '</td><td style="text-align:right;">' + fmtMoney(r.total_cents||0) + '</td>' + bzCell(r.fund_name) + deltaCell(r.total_cents, r.fund_name) + '</tr>';
         });
       }
     });
+    // Append Breeze-only funds (present in Breeze for this window, absent from our DB)
+    if (bz) {
+      var ourNames = {};
+      (d.rows||[]).forEach(function(r) { ourNames[(r.fund_name||'').trim().toLowerCase()] = true; });
+      (bz.rows||[]).forEach(function(r) {
+        if (!ourNames[(r.fund_name||'').trim().toLowerCase()]) {
+          rows += '<tr><td style="color:var(--clay-red);">' + esc(r.fund_name) + ' <span style="font-size:.75rem;">(Breeze only)</span></td><td style="text-align:right;color:var(--warm-gray);">' + (r.count||0) + '</td><td style="text-align:right;color:var(--warm-gray);">—</td><td style="text-align:right;">' + fmtMoney(r.total_cents||0) + '</td><td style="text-align:right;color:var(--clay-red);">-' + fmtMoney(r.total_cents||0) + '</td></tr>';
+        }
+      });
+    }
     var givers = d.total_givers || 0;
     var txns   = d.total_transactions || 0;
     var grand  = d.grand_total_cents || 0;
@@ -348,17 +391,25 @@ function runGivingSummary() {
       + 'onclick="reconcileGivingOrphans(\'' + esc(from) + '\',\'' + esc(to) + '\')">Reconcile Orphans</button>';
     var diagBtn = '<button id="rpt-diagnose-btn" class="btn-secondary" style="font-size:.8rem;padding:4px 10px;" '
       + 'onclick="diagnoseGivingReconcile(\'' + esc(from) + '\',\'' + esc(to) + '\')">Diagnose</button>';
+    var bzBtn  = '<button id="rpt-breeze-compare-btn" class="btn-secondary" style="font-size:.8rem;padding:4px 10px;" '
+      + 'onclick="compareBreezeFundTotals(\'' + esc(from) + '\',\'' + esc(to) + '\')">' + (bz ? 'Refresh Breeze' : 'Compare Breeze') + '</button>';
+    var bzGrand = bz ? (bz.grand_total_cents||0) : 0;
+    var bzGrandDiff = (grand||0) - bzGrand;
     showRptOutput(
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
       + '<h3 style="font-family:var(--font-head);color:var(--steel-anchor);">Giving by Fund: ' + esc(fmtDate(from)) + ' – ' + esc(fmtDate(to)) + '</h3>'
-      + '<div style="display:flex;gap:8px;">' + diagBtn + reconBtn + '<button class="btn-secondary" style="font-size:.8rem;padding:4px 10px;" onclick="window.print()">Print</button></div></div>'
+      + '<div style="display:flex;gap:8px;">' + diagBtn + bzBtn + reconBtn + '<button class="btn-secondary" style="font-size:.8rem;padding:4px 10px;" onclick="window.print()">Print</button></div></div>'
       + overview
       + methodTable
       + ageTable
       + '<h4 style="font-family:var(--font-head);color:var(--steel-anchor);margin:6px 0 6px 0;">By Fund</h4>'
-      + '<table class="rpt-table"><thead><tr><th>Fund</th><th style="text-align:right;">Gifts</th><th style="text-align:right;">Total</th></tr></thead><tbody>'
+      + '<table class="rpt-table"><thead><tr><th>Fund</th><th style="text-align:right;">Gifts</th><th style="text-align:right;">' + (bz ? 'App Total' : 'Total') + '</th>'
+      + (bz ? '<th style="text-align:right;">Breeze Total</th><th style="text-align:right;">Δ (App − Breeze)</th>' : '')
+      + '</tr></thead><tbody>'
       + rows
-      + '<tr class="rpt-total"><td>Total</td><td></td><td style="text-align:right;">' + fmtMoney(grand) + '</td></tr>'
+      + '<tr class="rpt-total"><td>Total</td><td></td><td style="text-align:right;">' + fmtMoney(grand) + '</td>'
+      + (bz ? '<td style="text-align:right;">' + fmtMoney(bzGrand) + '</td><td style="text-align:right;color:' + (bzGrandDiff===0?'var(--moss-green)':'var(--clay-red)') + ';">' + (bzGrandDiff>0?'+':'') + fmtMoney(bzGrandDiff) + '</td>' : '')
+      + '</tr>'
       + '</tbody></table>'
     );
   });

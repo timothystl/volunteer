@@ -45,6 +45,8 @@ export function makeBreezeClient(env) {
     // ── Funds ──────────────────────────────────────────────────────────────
     funds:    ()   => get('funds'),
     fund:     (id) => get(`funds/${id}`),
+    // Newer endpoint that can include lifetime/YTD totals per fund.
+    fundsList: (includeTotals) => get('funds/list' + (includeTotals ? '?include_totals=1' : '')),
 
     // ── People read ────────────────────────────────────────────────────────
     // `queryString` is a pre-built query string. Callers must build it manually
