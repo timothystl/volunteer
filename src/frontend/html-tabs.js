@@ -688,6 +688,7 @@ export const HTML_TABS_2 = String.raw`
         </div>
         <button type="button" id="pv-photo-remove-btn" class="require-edit" onclick="removePersonPhoto()" title="Remove photo" style="display:none;position:absolute;top:-4px;right:-4px;width:22px;height:22px;border-radius:50%;border:none;background:var(--clay-red);color:white;font-size:14px;line-height:1;cursor:pointer;padding:0;box-shadow:0 1px 3px rgba(0,0,0,.3);">&times;</button>
         <button type="button" id="pv-photo-recrop-btn" class="require-edit" onclick="recropPersonPhoto()" title="Re-crop current photo" style="display:none;position:absolute;top:-4px;left:-4px;width:22px;height:22px;border-radius:50%;border:none;background:var(--steel-anchor);color:white;font-size:12px;line-height:1;cursor:pointer;padding:0;box-shadow:0 1px 3px rgba(0,0,0,.3);">&#9986;</button>
+        <button type="button" id="pv-photo-pick-btn" class="require-edit" onclick="openPVPhotoPicker()" title="Use a family member's photo" style="display:none;position:absolute;bottom:-4px;left:-4px;width:22px;height:22px;border-radius:50%;border:none;background:var(--moss-green);color:white;font-size:12px;line-height:1;cursor:pointer;padding:0;box-shadow:0 1px 3px rgba(0,0,0,.3);">&#128100;</button>
       </div>
       <input type="file" id="pv-photo-input" accept="image/*" style="display:none;" onchange="handlePhotoFileSelected(this)">
       <div class="pv-hdr-info">
@@ -1184,6 +1185,14 @@ export const HTML_TABS_2 = String.raw`
       <button class="btn-primary" onclick="addMemberType()">Add</button>
     </div>
     <div class="modal-actions"><button class="btn-secondary" onclick="closeModal('member-types-modal')">Close</button></div>
+  </div>
+</div>
+<div class="modal-overlay" id="pv-photo-pick-modal" onclick="if(event.target===this)closeModal('pv-photo-pick-modal')">
+  <div class="modal" style="max-width:520px;">
+    <h2 style="margin-bottom:6px;">Use a Family Photo</h2>
+    <div style="font-size:.82rem;color:var(--warm-gray);margin-bottom:12px;">Pick the household photo or a family member's photo to use as this person's profile picture.</div>
+    <div id="pv-photo-pick-list" style="display:flex;flex-wrap:wrap;gap:10px;max-height:50vh;overflow-y:auto;"></div>
+    <div class="modal-actions"><button class="btn-secondary" onclick="closeModal('pv-photo-pick-modal')">Cancel</button></div>
   </div>
 </div>
 <div class="modal-overlay" id="hh-photo-pick-modal" onclick="if(event.target===this)closeModal('hh-photo-pick-modal')">

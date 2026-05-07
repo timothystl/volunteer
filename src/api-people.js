@@ -313,7 +313,7 @@ if (pmatch) {
   const pid = parseInt(pmatch[1]);
   if (method === 'GET') {
     const p = await db.prepare(
-      `SELECT p.*, h.name as household_name FROM people p
+      `SELECT p.*, h.name as household_name, h.photo_url as household_photo_url FROM people p
        LEFT JOIN households h ON p.household_id=h.id WHERE p.id=?`
     ).bind(pid).first();
     if (!p) return json({ error: 'Not found' }, 404);
@@ -575,6 +575,22 @@ if (photoMatch && method === 'POST') {
   const photoUrl = `/admin/r2photo/${r2Key}`;
   await db.prepare('UPDATE people SET photo_url=? WHERE id=?').bind(photoUrl, pid).run();
   return json({ ok: true, photo_url: photoUrl });
+}
+// Copy a photo URL into this person's record. Used by the "pick from family"
+// picker to apply a household member's photo or the household photo to this
+// person without re-uploading. Sets locally_edited=1.
+if (photoMatch && method === 'PUT') {
+  if (!isStaff) return json({ error: 'Insufficient permissions' }, 403);
+  const pid = parseInt(photoMatch[1]);
+  let body = {}; try { body = await req.json(); } catch {}
+  const newUrl = String(body.photo_url || '').trim();
+  if (!newUrl) return json({ error: 'photo_url required' }, 400);
+  // Light validation: only accept R2 paths or breezechms.com URLs (matches what
+  // the rest of the app produces). Prevents arbitrary URL injection.
+  const ok = newUrl.startsWith('/admin/r2photo/') || newUrl.includes('breezechms.com');
+  if (!ok) return json({ error: 'Unsupported photo URL' }, 400);
+  await db.prepare('UPDATE people SET photo_url=?, locally_edited=1 WHERE id=?').bind(newUrl, pid).run();
+  return json({ ok: true, photo_url: newUrl });
 }
 // Remove a person's photo: clears photo_url and deletes any R2 objects under
 // people/{pid}/ and people/breeze_*/ for this person. Sync no longer
