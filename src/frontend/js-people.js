@@ -351,6 +351,8 @@ function showProfile(p) {
     if (overlayEl) overlayEl.style.display = (_userRole !== 'member') ? 'flex' : 'none';
     var rmBtn = document.getElementById('pv-photo-remove-btn');
     if (rmBtn) rmBtn.style.display = (p.photo_url && _userRole !== 'member') ? 'block' : 'none';
+    var rcBtn = document.getElementById('pv-photo-recrop-btn');
+    if (rcBtn) rcBtn.style.display = (p.photo_url && _userRole !== 'member') ? 'block' : 'none';
   }
   var fnEl = document.getElementById('pv-fullname');
   if (fnEl) fnEl.textContent = displayName;
@@ -938,6 +940,17 @@ function handlePhotoFileSelected(input) {
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
+}
+function recropPersonPhoto() {
+  var p = _currentPvPerson;
+  if (!p || !p.photo_url) return;
+  var img = new Image();
+  // Same-origin: photoSrc returns either /admin/r2photo/... or
+  // /admin/photo-proxy?url=... — both come from this worker, so the
+  // canvas won't be tainted by drawImage.
+  img.onload = function() { showCropModal(img, uploadPersonPhoto); };
+  img.onerror = function() { alert('Could not load the current photo for re-cropping.'); };
+  img.src = photoSrc(p.photo_url);
 }
 function removePersonPhoto() {
   var pid = _currentPvPerson && _currentPvPerson.id;
