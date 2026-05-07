@@ -240,7 +240,7 @@ if (seg === 'people' && method === 'POST') {
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).bind(b.first_name||'',b.last_name||'',b.email||'',normalizePhone(b.phone||''),
          b.address1||'',b.address2||'',b.city||'',b.state||'MO',b.zip||'',
-         b.member_type||'visitor',b.dob||'',b.baptism_date||'',
+         (b.member_type||'visitor').toLowerCase(),b.dob||'',b.baptism_date||'',
          b.confirmation_date||'',b.anniversary_date||'',b.death_date||'',b.deceased?1:0,
          b.household_id||null,b.family_role||'',b.photo_url||'',b.notes||'',b.breeze_id||'',
          b.gender||'',b.marital_status||'', firstContactDate||'', b.sms_opt_in?1:0
@@ -259,7 +259,7 @@ if (seg === 'people' && method === 'POST') {
 if (seg === 'people/bulk-member-type' && method === 'POST') {
   let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
-  const mt = b.member_type || '';
+  const mt = (b.member_type || '').toLowerCase();
   if (!ids.length || !mt) return json({ error: 'ids and member_type required' }, 400);
   const placeholders = ids.map(() => '?').join(',');
   await db.prepare(`UPDATE people SET member_type=? WHERE id IN (${placeholders})`).bind(mt, ...ids).run();
@@ -398,7 +398,7 @@ if (pmatch) {
        baptized=?,confirmed=?,sms_opt_in=?,locally_edited=1 WHERE id=?`
     ).bind(b.first_name||'',b.last_name||'',b.email||'',normalizePhone(b.phone||''),
            b.address1||'',b.address2||'',b.city||'',b.state||'MO',b.zip||'',
-           b.member_type||'visitor',b.dob||'',b.baptism_date||'',
+           (b.member_type||'visitor').toLowerCase(),b.dob||'',b.baptism_date||'',
            b.confirmation_date||'',b.anniversary_date||'',b.death_date||'',b.deceased?1:0,
            b.household_id||null,b.family_role||'',b.photo_url||'',b.notes||'',
            b.public_directory!=null?(b.public_directory?1:0):1,

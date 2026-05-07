@@ -2438,7 +2438,8 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
   }
   const mappedRawPS  = statusNamePS ? (memberTypeMapPS[statusNamePS] || memberTypeMapPS[statusNamePS.toLowerCase()] || null) : null;
   const mappedTypePS = mappedRawPS ? (configuredMemberTypesPS.find(t => t.toLowerCase() === mappedRawPS.toLowerCase()) || mappedRawPS) : null;
-  const memberType   = mappedTypePS || (statusNamePS ? configuredMemberTypesPS.find(t => t.toLowerCase() === statusNamePS.toLowerCase()) : null) || '';
+  const memberTypeRaw = mappedTypePS || (statusNamePS ? configuredMemberTypesPS.find(t => t.toLowerCase() === statusNamePS.toLowerCase()) : null) || '';
+  const memberType    = memberTypeRaw.toLowerCase();
 
   // Contact info from typed detail arrays
   let email = '', phone = '';
@@ -2773,7 +2774,7 @@ if (seg === 'import/breeze' && method === 'POST') { try {
       // Default to 'Other' when no status found — never fall back to the first configured
       // type (which is typically 'Member'), as that causes blank-status people to be
       // incorrectly imported as members.
-      const memberType = matched || 'Other';
+      const memberType = (matched || 'Other').toLowerCase();
       // Dates — Breeze may return as a plain string, an object {date/value:"..."}, or an array.
       // extractDate unwraps all formats before passing to toISO.
       // Also check p.birth_date top-level field which Breeze exposes directly.
@@ -2936,6 +2937,8 @@ if (seg === 'import/breeze' && method === 'POST') { try {
     } catch (e) { errors.push({ breeze_id: p.id, error: e.message }); }
   }
   const done = people.length < limit;
+  // Defensive: ensure no row in this batch left a capitalized member_type behind.
+  await db.prepare("UPDATE people SET member_type=LOWER(member_type) WHERE member_type != LOWER(member_type)").run().catch(() => {});
   // Persist newly-seen Breeze statuses
   if (statusesSeen.size > 0) {
     try {
