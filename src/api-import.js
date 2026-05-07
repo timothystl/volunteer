@@ -2818,7 +2818,11 @@ if (seg === 'import/breeze' && method === 'POST') { try {
                  !GENERIC_PAT.some(pat => p.thumb.toLowerCase().includes(pat))) {
         photoUrl = p.thumb;
       }
-      if (photoUrl) photoUrl = await ingestBreezePhoto(env, String(p.id), photoUrl);
+      // Bulk path: do NOT ingest into R2 here — adds ~3 subrequests/person and
+      // tens of seconds of wall-clock to a 100-person batch, blowing past
+      // Cloudflare's connection budget. Frontend routes these URLs through
+      // /admin/photo-proxy, which works against files.breezechms.com without
+      // auth. R2 caching is still done in the per-person sync path.
       // Email, phone, address (from typed arrays)
       let email = '', phone = '';
       let addr = { street: '', city: '', state: '', zip: '' };
