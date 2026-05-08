@@ -1,0 +1,1 @@
+export const PUBLIC_FOOTER = `<footer>   <div class="footer-logo"><div class="footer-logo-placeholder">&#10013;</div></div>   <p>     Timothy Lutheran Church &mdash; LCMS &mdash; St. Louis, Missouri<br>     6704 Fyler Ave, St. Louis, MO 63139<br>     <a href="https://timothystl.org">timothystl.org</a>   </p> </footer>  `;
