@@ -105,13 +105,18 @@ if (seg === 'people' && method === 'GET') {
   const sortDir = url.searchParams.get('dir') === 'desc' ? 'DESC' : 'ASC';
   const like = '%' + q + '%';
   let where;
-  const binds = [like, like, like, like];
+  // Only constrain on the search-LIKE clause when the user actually typed
+  // something. Otherwise rows with NULL first_name/last_name/email/phone
+  // (legacy imports — schema says NOT NULL DEFAULT '' but old rows can
+  // still be NULL) get silently dropped from totals, causing membership
+  // counts to disagree with reports.
+  const binds = [];
+  const searchClause = q ? ` AND (p.first_name LIKE ? OR p.last_name LIKE ? OR p.email LIKE ? OR p.phone LIKE ?)` : '';
+  if (q) binds.push(like, like, like, like);
   if (archivedView) {
-    where = `p.status IN ('archived','deceased') AND LOWER(p.member_type) != 'organization'
-      AND (p.first_name LIKE ? OR p.last_name LIKE ? OR p.email LIKE ? OR p.phone LIKE ?)`;
+    where = `p.status IN ('archived','deceased') AND LOWER(p.member_type) != 'organization'` + searchClause;
   } else {
-    where = `p.active=1 AND LOWER(p.member_type) != 'organization'
-      AND (p.first_name LIKE ? OR p.last_name LIKE ? OR p.email LIKE ? OR p.phone LIKE ?)`;
+    where = `p.active=1 AND LOWER(p.member_type) != 'organization'` + searchClause;
   }
   // Member role can only see people with member_type='member'
   if (!canEdit) { where += ` AND LOWER(p.member_type)='member'`; }
