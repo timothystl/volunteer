@@ -111,8 +111,8 @@ export async function handleSignup(req, env) {
   if (resendKey && emailFrom && email) {
     const ministry = data.ministry || 'general';
     const ministryLabels = { worship: 'Worship', events: 'Community Events', education: 'Christian Education',
-      acceptance: 'Acceptance Ministry', outreach: 'Outreach', lasm: 'LASM', wol: 'Word of Life',
-      cfna: 'CFNA', general: 'General Interest' };
+      acceptance: 'Acceptance Ministry', outreach: 'Outreach', transportation: 'Transportation Ministry',
+      lasm: 'LASM', wol: 'Word of Life', cfna: 'CFNA', general: 'General Interest' };
     const ministryLabel = ministryLabels[ministry] || ministry;
     const rolesList = (data.roles && data.roles.length) ? data.roles.join(', ') : '';
     const rolesLine = rolesList ? `\nRoles/shifts selected: ${rolesList}` : '';
