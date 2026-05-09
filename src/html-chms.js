@@ -14,7 +14,7 @@ import { JS_EXPORT_IMPORT } from './frontend/js-export-import.js';
 import { JS_ATTENDANCE } from './frontend/js-attendance.js';
 import { JS_VOLUNTEERS } from './frontend/js-volunteers.js';
 
-export const CHMS_MANIFEST_JSON = '{"name":"TLC Church Directory","short_name":"TLC Directory","description":"People directory and giving records for Timothy Lutheran Church","start_url":"/chms","display":"standalone","theme_color":"#0A3C5C","background_color":"#EDF5F8","scope":"/","icons":[{"src":"tlc-logo.png","sizes":"500x500","type":"image/png","purpose":"any maskable"}]}';
+export const CHMS_MANIFEST_JSON = '{"name":"TLC Gather","short_name":"Gather","description":"Church management for Timothy Lutheran Church","start_url":"/","display":"standalone","theme_color":"#1E2D4A","background_color":"#F8F4EE","scope":"/","icons":[{"src":"/icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},{"src":"/icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},{"src":"/icons/icon-512-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}]}';
 
 // ── SERVICE WORKER ──────────────────────────────────────────────────
 export const SW_JS = `
@@ -64,7 +64,7 @@ self.addEventListener('fetch', function(event) {
     );
     return;
   }
-  if (url.pathname === '/chms.webmanifest' || url.pathname === '/tlc-logo.png') {
+  if (url.pathname === '/chms.webmanifest' || url.pathname.startsWith('/icons/')) {
     event.respondWith(caches.match(event.request).then(function(c){ return c || fetch(event.request); }));
   }
 });
