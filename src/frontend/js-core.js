@@ -1,6 +1,6 @@
 export const JS_CORE = String.raw`<script>
 // ── DEPLOY VERSION ───────────────────────────────────────────────────
-var DEPLOY_VERSION = '2026-05-09-v210';
+var DEPLOY_VERSION = '2026-05-09-v211';
 window.onerror = function(msg, src, line, col, err) {
   // Benign browser quirks — suppress these and don't show the error banner.
   if (msg && String(msg).indexOf('ResizeObserver loop') !== -1) return true;
@@ -128,6 +128,8 @@ function showTab(name) {
   if (name === 'volunteers' && _userRole !== 'admin') return;
   if (name === 'scheduler'  && _userRole !== 'admin') return;
   var labels = {home:'Home',people:'People',households:'Households',organizations:'Organizations',giving:'Giving',reports:'Reports',attendance:'Attendance',register:'Register',import:'Import',settings:'Settings',volunteers:'Volunteers',scheduler:'Scheduler'};
+  // Three-pillar map: People (people data), Giving (financial), Ministry (engagement/admin)
+  var pillars = {people:'people',households:'people',organizations:'people',giving:'giving',attendance:'ministry',reports:'ministry',register:'ministry',volunteers:'ministry',scheduler:'ministry'};
   // Push browser history so back button works (skip when responding to popstate)
   if (!_tabFromPopState) {
     history.pushState({ tab: name }, '', '#' + name);
@@ -143,6 +145,13 @@ function showTab(name) {
   });
   var t = document.getElementById('topbar-title');
   if (t) t.textContent = labels[name] || name;
+  var pillEl = document.getElementById('topbar-pill');
+  if (pillEl) {
+    var pillar = pillars[name];
+    pillEl.className = 'pill-section' + (pillar ? ' pill-' + pillar : '');
+    pillEl.textContent = pillar || '';
+    pillEl.hidden = !pillar;
+  }
   closeSidebar();
   if (name === 'home') loadDashboard();
   if (name === 'people') loadPeople();

@@ -59,11 +59,13 @@ header{background:var(--white);border-bottom:3px solid var(--amber);padding:14px
 .s-logo{width:34px;height:34px;border-radius:8px;background:var(--color-navy);display:flex;align-items:center;justify-content:center;margin-bottom:10px;flex-shrink:0;cursor:pointer;align-self:center;overflow:hidden;}
 .s-logo svg{width:32px;height:32px;display:block;}
 .s-item{width:100%;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:flex-start;padding:0 8px 0 14px;gap:10px;cursor:pointer;position:relative;flex-shrink:0;transition:background .12s;overflow:hidden;white-space:nowrap;}
-.s-item:hover{background:rgba(255,255,255,.1);}
-.s-item.active{background:var(--teal);}
+.s-item:hover{background:rgba(255,255,255,.08);}
+.s-item.active{background:rgba(46,126,166,.22);box-shadow:inset 3px 0 0 var(--color-teal);}
 .s-item svg{width:19px;height:19px;fill:none;stroke:rgba(255,255,255,.55);stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
-.s-item.active svg{stroke:white;}
+.s-item.active svg{stroke:#fff;}
 .s-divider{width:28px;height:1px;background:rgba(255,255,255,.15);margin:4px 0;flex-shrink:0;align-self:center;}
+.s-section-hdr{font-family:var(--font-body);font-size:10px;font-weight:500;letter-spacing:.3em;text-transform:uppercase;color:var(--color-gold);padding:10px 14px 4px;white-space:nowrap;opacity:0;transition:opacity .12s;pointer-events:none;}
+.sidebar:hover .s-section-hdr{opacity:1;}
 .s-bottom{margin-top:auto;display:flex;flex-direction:column;align-items:stretch;gap:4px;}
 .s-tip{position:static;transform:none;background:transparent;border:none;padding:0;font-size:13px;color:rgba(255,255,255,.7);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .12s;z-index:auto;}
 .sidebar:hover .s-tip{opacity:1;}
@@ -111,6 +113,12 @@ header{background:var(--white);border-bottom:3px solid var(--amber);padding:14px
 .pill-tag{border-color:var(--sky-steel);color:var(--sky-steel);}
 .pill-tag.active{background:var(--sky-steel);color:var(--white);}
 .tag-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;}
+/* ── TLC Gather three-pill section identifiers ── */
+.pill-section{display:inline-flex;align-items:center;padding:3px 11px;border-radius:99px;font-family:var(--font-body);font-size:10px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:#fff;white-space:nowrap;line-height:1.4;}
+.pill-section.pill-people{background:var(--color-navy);}
+.pill-section.pill-ministry{background:var(--color-teal);}
+.pill-section.pill-giving{background:var(--color-gold);}
+.pill-section[hidden]{display:none;}
 /* ── BUTTONS ── */
 .btn-primary{padding:8px 18px;background:var(--steel-anchor);color:var(--white);border:none;border-radius:8px;font-family:var(--font-body);font-size:.9rem;font-weight:700;cursor:pointer;transition:background .15s;}
 .btn-primary:hover{background:var(--deep-steel);}
@@ -481,16 +489,17 @@ code{background:var(--linen);padding:1px 5px;border-radius:4px;font-size:.85em;f
 <nav class="sidebar" id="sidebar">
   <div class="s-logo" onclick="showTab('home')" title="Home"><svg viewBox="0 0 60 60" aria-label="TLC Gather"><circle cx="22" cy="25" r="11" fill="#4D6BA0"/><circle cx="38" cy="25" r="11" fill="#2E7EA6"/><circle cx="30" cy="38" r="11" fill="#C9973A"/><circle cx="30" cy="30" r="1.6" fill="#F8F4EE"/></svg></div>
   <div class="s-item active" data-tab="home" onclick="showTab('home')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg><span class="s-tip">Home</span></div>
-  <div class="s-divider"></div>
+  <div class="s-section-hdr">People</div>
   <div class="s-item" data-tab="people" onclick="showTab('people')"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><span class="s-tip">People</span></div>
   <div class="s-item" data-tab="households" onclick="showTab('households')"><svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/></svg><span class="s-tip">Households</span></div>
   <div class="s-item" data-tab="organizations" onclick="showTab('organizations')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="1"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9" y1="14.5" x2="15" y2="14.5"/></svg><span class="s-tip">Organizations</span></div>
-  <div class="s-divider"></div>
+  <div class="s-section-hdr require-finance">Giving</div>
   <div class="s-item require-finance" data-tab="giving" onclick="showTab('giving')"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8L2 7h20l-6-4z"/></svg><span class="s-tip">Giving</span></div>
+  <div class="s-section-hdr no-member">Ministry</div>
   <div class="s-item require-staff" data-tab="attendance" onclick="showTab('attendance')"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4"/></svg><span class="s-tip">Attendance</span></div>
   <div class="s-item no-member" data-tab="reports" onclick="showTab('reports')"><svg viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg><span class="s-tip">Reports</span></div>
   <div class="s-item require-staff" data-tab="register" onclick="showTab('register')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><line x1="9" y1="7" x2="17" y2="7"/><line x1="9" y1="11" x2="14" y2="11"/></svg><span class="s-tip">Register</span></div>
-  <div class="s-divider require-admin"></div>
+  <div class="s-section-hdr require-admin">Admin</div>
   <div class="s-item require-admin" data-tab="volunteers" onclick="showTab('volunteers')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg><span class="s-tip">Volunteers</span></div>
   <div class="s-item require-admin" data-tab="scheduler" onclick="showTab('scheduler')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg><span class="s-tip">Scheduler</span></div>
   <div class="s-bottom">
@@ -500,6 +509,7 @@ code{background:var(--linen);padding:1px 5px;border-radius:4px;font-size:.85em;f
 <div class="content-area">
 <div class="topbar">
   <button class="hamburger" onclick="openSidebar()" aria-label="Menu"><svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+  <span class="pill-section" id="topbar-pill" hidden></span>
   <span class="topbar-title" id="topbar-title">People</span>
   <div style="display:flex;gap:8px;align-items:center;">
     <span style="font-size:.7rem;color:var(--warm-gray);" id="deploy-ver"></span>
