@@ -12,17 +12,23 @@ export const HTML_HEAD = String.raw`<!DOCTYPE html>
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
-<link href="https://fonts.googleapis.com/css2?family=Lora:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500;1,600&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --steel-anchor:#0A3C5C;--deep-steel:#2A5470;--mid-steel:#3D627C;--sky-steel:#5C8FA8;
-  --ice-blue:#C4DDE8;--blue-mist:#EDF5F8;--amber:#D4922A;--deep-amber:#C07D1E;
-  --pale-gold:#F5E0B0;--sage:#6B8F71;--pale-sage:#CDE0CF;--warm-white:#FAF7F0;
-  --linen:#F2EDE2;--white:#FFFFFF;--border:#E8E0D0;--charcoal:#3D3530;--warm-gray:#7A6E60;
-  --font-head:'Lora',Georgia,serif;--font-body:'Source Sans 3',Arial,sans-serif;
+  /* ── TLC Gather brand tokens ── */
+  --color-navy:#1E2D4A;--color-teal:#2E7EA6;--color-gold:#C9973A;
+  --color-cream:#F8F4EE;--color-light-teal:#EAF4FA;
+  /* Legacy tokens (aliased to brand palette so older rules pick up the new look without renames) */
+  --steel-anchor:#1E2D4A;--deep-steel:#2A3F60;--mid-steel:#3D627C;--sky-steel:#5C8FA8;
+  --ice-blue:#C4DDE8;--blue-mist:#EAF4FA;--amber:#C9973A;--deep-amber:#A87B23;
+  --pale-gold:#F5E0B0;--sage:#6B8F71;--pale-sage:#CDE0CF;--warm-white:#F8F4EE;
+  --linen:#F2EDE2;--white:#FFFFFF;--border:#E8E0D0;--charcoal:#1A1A2A;--warm-gray:#7A6E60;
+  --font-display:'Cormorant Garamond',Georgia,serif;
+  --font-head:'DM Sans','Source Sans 3',Arial,sans-serif;
+  --font-body:'DM Sans','Source Sans 3',Arial,sans-serif;
   --danger:#B85C3A;
   --navy:#1E2D4A;--teal:#2E7EA6;--gold-accent:#C9973A;
-  --bg:#F7F6F3;--muted:#6B7280;--faint:#9CA3AF;
+  --bg:#F8F4EE;--muted:#6B7280;--faint:#9CA3AF;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;overflow:hidden;}
@@ -50,8 +56,8 @@ header{background:var(--white);border-bottom:3px solid var(--amber);padding:14px
 .app-shell{display:flex;height:100vh;}
 /* ── SIDEBAR ── */
 .sidebar{position:fixed;left:0;top:0;height:100vh;width:54px;background:var(--navy);display:flex;flex-direction:column;align-items:stretch;padding:12px 0;gap:4px;overflow:hidden;transition:width .2s ease;z-index:200;}.sidebar:hover{width:200px;}a.s-item{text-decoration:none;color:inherit;}
-.s-logo{width:34px;height:34px;border-radius:8px;background:var(--gold-accent);display:flex;align-items:center;justify-content:center;margin-bottom:10px;flex-shrink:0;cursor:pointer;align-self:center;}
-.s-logo svg{width:18px;height:18px;fill:white;}
+.s-logo{width:34px;height:34px;border-radius:8px;background:var(--color-navy);display:flex;align-items:center;justify-content:center;margin-bottom:10px;flex-shrink:0;cursor:pointer;align-self:center;overflow:hidden;}
+.s-logo svg{width:32px;height:32px;display:block;}
 .s-item{width:100%;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:flex-start;padding:0 8px 0 14px;gap:10px;cursor:pointer;position:relative;flex-shrink:0;transition:background .12s;overflow:hidden;white-space:nowrap;}
 .s-item:hover{background:rgba(255,255,255,.1);}
 .s-item.active{background:var(--teal);}
@@ -473,7 +479,7 @@ code{background:var(--linen);padding:1px 5px;border-radius:4px;font-size:.85em;f
 <div id="error-boundary" role="alert" aria-live="assertive" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#c0392b;color:#fff;padding:11px 20px;border-radius:9px;font-size:.85rem;max-width:520px;width:90vw;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.3);"></div>
 <div class="app-shell">
 <nav class="sidebar" id="sidebar">
-  <div class="s-logo" onclick="showTab('home')" title="Home"><svg viewBox="0 0 20 20"><path d="M10 1L2 7v12h6v-5h4v5h6V7L10 1z"/></svg></div>
+  <div class="s-logo" onclick="showTab('home')" title="Home"><svg viewBox="0 0 60 60" aria-label="TLC Gather"><circle cx="22" cy="25" r="11" fill="#4D6BA0"/><circle cx="38" cy="25" r="11" fill="#2E7EA6"/><circle cx="30" cy="38" r="11" fill="#C9973A"/><circle cx="30" cy="30" r="1.6" fill="#F8F4EE"/></svg></div>
   <div class="s-item active" data-tab="home" onclick="showTab('home')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg><span class="s-tip">Home</span></div>
   <div class="s-divider"></div>
   <div class="s-item" data-tab="people" onclick="showTab('people')"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><span class="s-tip">People</span></div>
