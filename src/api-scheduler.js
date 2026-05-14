@@ -477,3 +477,125 @@ export async function handleSchedBreezeProxy(req, env, url) {
     headers: { ...SCHED_CORS, 'Content-Type': res.headers.get('Content-Type') || 'application/json' },
   });
 }
+
+// ── VOLUNTEER EMAIL TEMPLATES ─────────────────────────────────────────────
+// GET    /admin/api/volunteer-templates
+// POST   /admin/api/volunteer-templates
+// PUT    /admin/api/volunteer-templates/:id
+// DELETE /admin/api/volunteer-templates/:id
+export async function handleVolunteerTemplates(req, env, url, method) {
+  const db = env.DB;
+  const seg = url.pathname.replace('/admin/api/volunteer-templates', '').replace(/^\//, '');
+  const idPart = seg ? parseInt(seg) : 0;
+
+  if (!seg && method === 'GET') {
+    const rows = (await db.prepare('SELECT * FROM volunteer_email_templates ORDER BY ministry, name').all()).results || [];
+    return json({ templates: rows });
+  }
+
+  if (!seg && method === 'POST') {
+    let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+    if (!b.name || !b.subject || !b.body) return json({ error: 'name, subject, and body are required' }, 400);
+    const r = await db.prepare(
+      `INSERT INTO volunteer_email_templates (name, ministry, subject, body) VALUES (?,?,?,?)`
+    ).bind(b.name.trim(), b.ministry || '', b.subject.trim(), b.body.trim()).run();
+    return json({ ok: true, id: r.meta?.last_row_id });
+  }
+
+  if (idPart && method === 'PUT') {
+    let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+    await db.prepare(
+      `UPDATE volunteer_email_templates SET name=?, ministry=?, subject=?, body=? WHERE id=?`
+    ).bind(b.name || '', b.ministry || '', b.subject || '', b.body || '', idPart).run();
+    return json({ ok: true });
+  }
+
+  if (idPart && method === 'DELETE') {
+    await db.prepare('DELETE FROM volunteer_email_templates WHERE id=?').bind(idPart).run();
+    return json({ ok: true });
+  }
+
+  return json({ error: 'Not found' }, 404);
+}
+
+// ── SIGNUP: LINK TO PERSON ────────────────────────────────────────────────
+// POST /admin/api/signups/:id/link-person
+// Body: { person_id: number } — link to existing person
+//    OR { create: true } — create new visitor from signup data
+export async function handleSignupLinkPerson(req, env, signupId) {
+  const db = env.DB;
+  const signup = await db.prepare('SELECT * FROM signups WHERE id=?').bind(signupId).first();
+  if (!signup) return json({ error: 'Signup not found' }, 404);
+
+  let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+
+  if (b.create) {
+    // Split "First Last" into parts; anything after first word is last name
+    const parts = (signup.name || '').trim().split(/\s+/);
+    const firstName = parts[0] || '';
+    const lastName = parts.slice(1).join(' ');
+    const r = await db.prepare(
+      `INSERT INTO people (first_name, last_name, email, phone, member_type, first_contact_date)
+       VALUES (?,?,?,?,?,date('now'))`
+    ).bind(firstName, lastName, signup.email || '', signup.phone || '', 'visitor').run();
+    const personId = r.meta?.last_row_id;
+    await db.prepare('UPDATE signups SET person_id=? WHERE id=?').bind(personId, signupId).run();
+    return json({ ok: true, person_id: personId, created: true });
+  }
+
+  if (b.person_id) {
+    const exists = await db.prepare('SELECT id FROM people WHERE id=?').bind(b.person_id).first();
+    if (!exists) return json({ error: 'Person not found' }, 404);
+    await db.prepare('UPDATE signups SET person_id=? WHERE id=?').bind(b.person_id, signupId).run();
+    return json({ ok: true, person_id: b.person_id, created: false });
+  }
+
+  if (b.person_id === null || b.unlink) {
+    await db.prepare('UPDATE signups SET person_id=NULL WHERE id=?').bind(signupId).run();
+    return json({ ok: true, person_id: null });
+  }
+
+  return json({ error: 'person_id or create:true required' }, 400);
+}
+
+// ── SIGNUP: SEND EMAIL ────────────────────────────────────────────────────
+// POST /admin/api/signups/:id/send-email
+// Body: { subject: string, body: string, reply_to?: string }
+export async function handleSignupSendEmail(req, env, signupId) {
+  const db = env.DB;
+  const signup = await db.prepare('SELECT * FROM signups WHERE id=?').bind(signupId).first();
+  if (!signup) return json({ error: 'Signup not found' }, 404);
+
+  const email = (signup.email || '').trim();
+  if (!email) return json({ error: 'This volunteer has no email address' }, 400);
+
+  let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const subject = (b.subject || '').trim();
+  const body    = (b.body    || '').trim();
+  if (!subject || !body) return json({ error: 'subject and body are required' }, 400);
+
+  const resendKey = env.RESEND_API_KEY || '';
+  const emailFrom = env.EMAIL_FROM || '';
+  if (!resendKey || !emailFrom) return json({ error: 'Email not configured (RESEND_API_KEY / EMAIL_FROM missing)' }, 500);
+
+  const replyTo = (b.reply_to || 'office@timothystl.org').trim();
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + resendKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: emailFrom, to: email, reply_to: replyTo, subject, text: body }),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    return json({ error: 'Resend error: ' + errText }, 502);
+  }
+
+  await db.prepare(
+    `UPDATE signups SET contacted_at=datetime('now'), contact_count=contact_count+1 WHERE id=?`
+  ).bind(signupId).run();
+
+  await db.prepare(
+    `INSERT INTO audit_log (action, object_type, object_id, object_json) VALUES ('volunteer_email_sent', 'signup', ?, ?)`
+  ).bind(signupId, JSON.stringify({ to: email, subject })).run().catch(() => {});
+
+  return json({ ok: true });
+}

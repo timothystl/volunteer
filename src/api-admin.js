@@ -3,6 +3,7 @@ import { html, json, isAuthed, authCookieHeader, getAuthRole, getAuthInfo, hashP
 import { handleChmsApi } from './api-chms.js';
 import { LOGIN_HTML } from './html-templates.js';
 import { sendBirthdayEmails, sendAnniversaryEmails, sendBirthdayTexts, sendAnniversaryTexts } from './api-emails.js';
+import { applyXmasMarketDefaults, handleVolunteerTemplates, handleSignupLinkPerson, handleSignupSendEmail } from './api-scheduler.js';
 
 export const SCHEDULER_KEYS = [
   'ws_people','ws_schedule_v2','ws_history','ws_last_served',
@@ -295,6 +296,11 @@ export async function handleAdminApi(req, env, url, method) {
       const slotRows = await env.DB.prepare(
         `SELECT r.name, r.role_date, r.start_time, r.end_time FROM signup_slots ss JOIN serve_roles r ON ss.role_id=r.id WHERE ss.signup_id=?`
       ).bind(s.id).all();
+      let linkedPersonName = '';
+      if (s.person_id) {
+        const p = await env.DB.prepare('SELECT first_name, last_name FROM people WHERE id=?').bind(s.person_id).first();
+        if (p) linkedPersonName = ((p.first_name || '') + ' ' + (p.last_name || '')).trim();
+      }
       signups.push({
         id: s.id, event_id: s.event_id, role_id: s.role_id,
         ministry: s.ministry || '', name: s.name || '', email: s.email || '',
@@ -302,6 +308,8 @@ export async function handleAdminApi(req, env, url, method) {
         sundays: s.sundays || '[]', shirt_wanted: s.shirt_wanted || 0,
         shirt_size: s.shirt_size || '', notes: s.notes || '',
         created_at: s.created_at || '', event_name: s.event_name || null,
+        person_id: s.person_id || null, contact_count: s.contact_count || 0,
+        contacted_at: s.contacted_at || '', linked_person_name: linkedPersonName,
         slot_details: (slotRows.results || []).map(function(sl) {
           return { name: sl.name || '', role_date: sl.role_date || '', start_time: sl.start_time || '', end_time: sl.end_time || '' };
         }),
@@ -470,6 +478,29 @@ export async function handleAdminApi(req, env, url, method) {
       console.error('ChMS API error [' + method + ' ' + seg + ']:', e?.message, e?.stack);
       return json({ error: 'Internal server error. Please try again.' }, 500);
     }
+  }
+
+  // ── Volunteer email templates ────────────────────────────────────────
+  if (seg.startsWith('volunteer-templates')) {
+    const role = await getAuthRole(req, env);
+    if (!role) return json({ error: 'Access denied' }, 403);
+    return handleVolunteerTemplates(req, env, url, method);
+  }
+
+  // ── Signup: link to person ────────────────────────────────────────────
+  const linkMatch = seg.match(/^signups\/(\d+)\/link-person$/);
+  if (linkMatch && method === 'POST') {
+    const role = await getAuthRole(req, env);
+    if (!role) return json({ error: 'Access denied' }, 403);
+    return handleSignupLinkPerson(req, env, parseInt(linkMatch[1]));
+  }
+
+  // ── Signup: send email ────────────────────────────────────────────────
+  const sendMatch = seg.match(/^signups\/(\d+)\/send-email$/);
+  if (sendMatch && method === 'POST') {
+    const role = await getAuthRole(req, env);
+    if (!role) return json({ error: 'Access denied' }, 403);
+    return handleSignupSendEmail(req, env, parseInt(sendMatch[1]));
   }
 
   return json({ error: 'Not found' }, 404);
