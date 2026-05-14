@@ -3,13 +3,15 @@ export const HTML_HEAD = String.raw`<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>People &amp; Giving — Timothy Lutheran</title>
+<title>TLC Gather — Timothy Lutheran</title>
 <link rel="manifest" href="/chms.webmanifest">
-<meta name="theme-color" content="#0A3C5C">
+<meta name="theme-color" content="#1E2D4A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="TLC ChMS">
-<link rel="apple-touch-icon" href="/tlc-logo.png">
+<meta name="apple-mobile-web-app-title" content="Gather">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
 <link href="https://fonts.googleapis.com/css2?family=Lora:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 :root{

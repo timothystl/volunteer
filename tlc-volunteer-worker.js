@@ -161,6 +161,15 @@ async function _fetch(req, env) {
       const fRes = await fetch('https://raw.githubusercontent.com/timothystl/chms/main/favicon.svg', { cf: { cacheEverything: true, cacheTtl: 86400 } });
       return new Response(fRes.ok ? fRes.body : '', { status: fRes.ok ? 200 : 404, headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' } });
     }
+    // App icons (TLC Gather mark) — proxied from the repo so they update on deploy.
+    if (path.startsWith('/icons/') && method === 'GET') {
+      const m = path.match(/^\/icons\/(icon-(?:16|32|180|192|512|512-maskable)\.png|tlc-gather-icon\.svg)$/);
+      if (m) {
+        const fRes = await fetch('https://raw.githubusercontent.com/timothystl/chms/main/icons/' + m[1], { cf: { cacheEverything: true, cacheTtl: 86400 } });
+        const ct = m[1].endsWith('.svg') ? 'image/svg+xml' : 'image/png';
+        return new Response(fRes.ok ? fRes.body : '', { status: fRes.ok ? 200 : 404, headers: { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400' } });
+      }
+    }
     if ((path === '/' || path === '/index.html') && method === 'GET') {
       if (isChmsHost) {
         if (!await isAuthed(req, env)) return html(LOGIN_HTML);
