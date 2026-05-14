@@ -34,14 +34,7 @@ export const HTML_HEAD = String.raw`<!DOCTYPE html>
 html,body{height:100%;overflow:hidden;}
 body{font-family:var(--font-body);background:var(--warm-white);color:var(--charcoal);}
 a{color:var(--sky-steel);}
-/* ── HEADER ── */
-header{background:var(--white);border-bottom:3px solid var(--amber);padding:14px 24px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 12px rgba(10,60,92,.07);position:sticky;top:0;z-index:100;}
-.hdr-logo{font-size:1.6rem;color:var(--amber);flex-shrink:0;}
-.hdr-text{flex:1;}
-.hdr-church{font-size:.7rem;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.09em;}
-.hdr-title{font-family:var(--font-head);font-size:1.05rem;color:var(--steel-anchor);font-weight:700;line-height:1.2;}
-.hdr-sub{font-size:.78rem;color:var(--warm-gray);}
-.hdr-actions{display:flex;gap:8px;flex-shrink:0;}
+/* ── HEADER (legacy <header> element no longer rendered; rules removed PR 4/4) ── */
 .btn-sm{padding:6px 14px;border-radius:8px;font-family:var(--font-body);font-size:.82rem;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--linen);color:var(--charcoal);text-decoration:none;display:inline-flex;align-items:center;gap:4px;transition:background .15s;}
 .btn-sm:hover{background:var(--blue-mist);}
 /* ── OFFLINE BANNER ── */
@@ -128,9 +121,9 @@ header{background:var(--white);border-bottom:3px solid var(--amber);padding:14px
 .btn-danger:hover{background:#fdf0ec;}
 /* ── PERSON CARDS ── */
 .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
-.p-card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 10px rgba(10,60,92,.05);cursor:pointer;overflow:hidden;transition:box-shadow .15s;}
-.p-card:hover{box-shadow:0 4px 16px rgba(10,60,92,.1);}
-.p-card.member{border-left:3px solid var(--amber);}
+.p-card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 10px rgba(30,45,74,.06);cursor:pointer;overflow:hidden;transition:box-shadow .15s;}
+.p-card:hover{box-shadow:0 4px 16px rgba(30,45,74,.1);}
+.p-card.member{border-left:3px solid var(--color-navy);}
 .p-card-top{padding:14px 16px 10px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--linen);}
 .avatar{width:44px;height:44px;border-radius:50%;background:var(--ice-blue);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-head);font-size:.95rem;font-weight:700;color:var(--steel-anchor);overflow:hidden;}
 .avatar img{width:100%;height:100%;object-fit:cover;}
@@ -147,8 +140,8 @@ header{background:var(--white);border-bottom:3px solid var(--amber);padding:14px
 .p-tags{display:flex;flex-wrap:wrap;gap:4px;padding:0 16px 10px;}
 .tag-chip{font-size:.7rem;font-weight:600;padding:2px 8px;border-radius:10px;border-width:1px;border-style:solid;}
 /* ── HOUSEHOLDS ── */
-.h-card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 10px rgba(10,60,92,.05);cursor:pointer;padding:16px 18px;transition:box-shadow .15s;}
-.h-card:hover{box-shadow:0 4px 16px rgba(10,60,92,.1);}
+.h-card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 10px rgba(30,45,74,.06);cursor:pointer;padding:16px 18px;transition:box-shadow .15s;}
+.h-card:hover{box-shadow:0 4px 16px rgba(30,45,74,.1);}
 .h-name{font-family:var(--font-head);font-size:1rem;font-weight:700;color:var(--steel-anchor);margin-bottom:4px;}
 .h-addr{font-size:.85rem;color:var(--warm-gray);margin-bottom:8px;}
 .h-members{display:flex;flex-wrap:wrap;gap:6px;}
@@ -224,7 +217,7 @@ header{background:var(--white);border-bottom:3px solid var(--amber);padding:14px
 /* ── REPORTS ── */
 .report-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:20px;}
 .report-tile{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:box-shadow .15s;}
-.report-tile:hover{box-shadow:0 4px 16px rgba(10,60,92,.1);}
+.report-tile:hover{box-shadow:0 4px 16px rgba(30,45,74,.1);}
 .tile-icon{font-size:1.6rem;margin-bottom:8px;}
 .tile-title{font-family:var(--font-head);font-size:.95rem;color:var(--steel-anchor);font-weight:700;margin-bottom:4px;}
 .tile-desc{font-size:.8rem;color:var(--warm-gray);}
@@ -375,7 +368,7 @@ code{background:var(--linen);padding:1px 5px;border-radius:4px;font-size:.85em;f
 .dash-bday:last-child{border-bottom:none;}
 .dash-quick{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px;}
 .dash-quick-btn{display:flex;align-items:center;gap:8px;padding:12px 18px;background:var(--white);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:var(--charcoal);transition:border-color .15s,box-shadow .15s;}
-.dash-quick-btn:hover{border-color:var(--teal);box-shadow:0 0 0 3px rgba(76,154,143,.1);}
+.dash-quick-btn:hover{border-color:var(--teal);box-shadow:0 0 0 3px rgba(46,126,166,.12);}
 .dash-quick-btn svg{width:18px;height:18px;flex-shrink:0;stroke:var(--teal);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 .dash-section-hdr{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--charcoal);margin:24px 0 8px;}
 .dash-fu-item{display:flex;align-items:flex-start;gap:10px;padding:10px 16px;border-bottom:1px solid var(--linen);transition:opacity .3s;}
@@ -415,7 +408,7 @@ code{background:var(--linen);padding:1px 5px;border-radius:4px;font-size:.85em;f
 .pv-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 24px;flex-shrink:0;background:var(--white);}
 .pv-tab{font-size:13px;padding:11px 18px;color:var(--warm-gray);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px;transition:all .12s;}
 .pv-tab:hover{color:var(--charcoal);}
-.pv-tab.active{color:var(--charcoal);border-bottom-color:var(--amber);font-weight:600;}
+.pv-tab.active{color:var(--charcoal);border-bottom-color:var(--color-teal);font-weight:600;}
 .pv-layout{display:flex;flex:1;overflow:hidden;}
 .pv-main{flex:1;padding:24px;overflow-y:auto;background:var(--bg);}
 .ptab-panel{display:none;}
