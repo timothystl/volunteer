@@ -666,7 +666,7 @@ export const HTML_TABS_1 = String.raw`<!-- ═══ HOME / DASHBOARD TAB ══
       <div id="vol-signups-list" style="font-size:.85rem;color:var(--warm-gray);">Loading…</div>
     </div>
     <!-- Events management -->
-    <div id="vol-events-section">
+    <div id="vol-events-section" style="margin-bottom:28px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
         <h3 style="font-size:1rem;font-weight:600;color:var(--charcoal);">Community Events <span id="vol-events-count" style="background:var(--navy);color:#fff;border-radius:99px;padding:1px 8px;font-size:.75rem;margin-left:4px;">…</span></h3>
         <button class="btn-primary" style="font-size:.82rem;" onclick="volShowAddEventForm()">+ Add Event</button>
@@ -684,6 +684,102 @@ export const HTML_TABS_1 = String.raw`<!-- ═══ HOME / DASHBOARD TAB ══
         </div>
       </div>
       <div id="vol-events-list" style="font-size:.85rem;color:var(--warm-gray);">Loading…</div>
+    </div>
+
+    <!-- Email Templates section -->
+    <div id="vol-templates-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h3 style="font-size:1rem;font-weight:600;color:var(--charcoal);margin-bottom:2px;">Outreach Email Templates</h3>
+          <p style="font-size:.8rem;color:var(--warm-gray);margin:0;">Reusable form letters for welcoming volunteers to a ministry. Use <code style="font-size:.78rem;">{{first_name}}</code>, <code style="font-size:.78rem;">{{name}}</code>, <code style="font-size:.78rem;">{{ministry}}</code> as variables.</p>
+        </div>
+      </div>
+      <div id="vol-templates-list" style="margin-bottom:12px;"></div>
+      <!-- Add / Edit form -->
+      <div id="vol-tmpl-form" style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;">
+        <div style="font-size:.82rem;font-weight:600;color:var(--charcoal);margin-bottom:8px;" id="vol-tmpl-form-title">Add Template</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <div style="flex:2;min-width:160px;"><label style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:3px;">Template Name *</label><input type="text" id="vol-tmpl-name" class="form-input" style="width:100%;" placeholder="e.g. Worship Welcome"></div>
+          <div style="flex:1;min-width:120px;"><label style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:3px;">Ministry</label>
+            <select id="vol-tmpl-ministry" class="form-input" style="width:100%;">
+              <option value="">All ministries</option>
+              <option value="worship">Worship</option>
+              <option value="events">Events</option>
+              <option value="education">Education</option>
+              <option value="acceptance">Acceptance</option>
+              <option value="outreach">Outreach</option>
+              <option value="transportation">Transportation</option>
+              <option value="general">General</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:8px;"><label style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:3px;">Subject *</label><input type="text" id="vol-tmpl-subject" class="form-input" style="width:100%;" placeholder="e.g. Welcome to the Worship Ministry at Timothy!"></div>
+        <div style="margin-bottom:10px;"><label style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:3px;">Message Body *</label><textarea id="vol-tmpl-body" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:.83rem;font-family:inherit;height:120px;resize:vertical;" placeholder="Hi {{first_name}},&#10;&#10;Thank you for your interest in the Worship Ministry! We meet every Sunday…"></textarea></div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-primary" style="font-size:.82rem;" id="vol-tmpl-save-btn" onclick="volSaveTemplate()">Add Template</button>
+          <button class="btn-secondary" style="font-size:.82rem;display:none;" id="vol-tmpl-cancel-btn" onclick="volCancelEditTemplate()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ VOLUNTEER: LINK PERSON MODAL ═══ -->
+<div id="vol-link-person-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeModal('vol-link-person-modal')">
+  <div class="modal-box" style="max-width:520px;width:95%;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <h3 style="font-size:1rem;font-weight:700;color:var(--charcoal);">Link to Person Record</h3>
+      <button onclick="closeModal('vol-link-person-modal')" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--warm-gray);">✕</button>
+    </div>
+    <div style="font-size:.85rem;color:#4A4860;margin-bottom:10px;">Signup: <strong id="vol-link-signup-name"></strong></div>
+    <!-- Current link -->
+    <div id="vol-link-current" style="display:none;background:rgba(46,126,166,.08);border:1px solid rgba(46,126,166,.2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:.83rem;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <span>Currently linked: <strong id="vol-link-current-name"></strong> <span style="color:var(--warm-gray);">#<span id="vol-link-current-id"></span></span></span>
+      <button class="btn-secondary" style="font-size:.75rem;padding:2px 8px;color:var(--danger);" onclick="volDoUnlinkPerson()">Unlink</button>
+    </div>
+    <!-- Search -->
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
+      <input type="text" id="vol-link-search" class="form-input" style="flex:1;" placeholder="Search by name or email…" onkeydown="if(event.key==='Enter')volSearchPeople()">
+      <button class="btn-primary" style="font-size:.82rem;" onclick="volSearchPeople()">Search</button>
+    </div>
+    <div id="vol-link-results" style="max-height:220px;overflow-y:auto;margin-bottom:10px;"></div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span style="font-size:.8rem;color:var(--warm-gray);">No match? Create a new Visitor profile from this sign-up.</span>
+      <button class="btn-secondary" style="font-size:.82rem;" onclick="volDoCreatePerson()">+ Create New Person</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ VOLUNTEER: SEND EMAIL MODAL ═══ -->
+<div id="vol-send-email-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeModal('vol-send-email-modal')">
+  <div class="modal-box" style="max-width:580px;width:95%;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <h3 style="font-size:1rem;font-weight:700;color:var(--charcoal);">Send Outreach Email</h3>
+      <button onclick="closeModal('vol-send-email-modal')" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--warm-gray);">✕</button>
+    </div>
+    <div style="font-size:.82rem;color:#4A4860;margin-bottom:12px;">To: <strong id="vol-send-to"></strong></div>
+    <!-- Template picker -->
+    <div style="margin-bottom:10px;">
+      <label style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Start from a template</label>
+      <div style="display:flex;gap:6px;">
+        <select id="vol-send-template-select" class="form-input" style="flex:1;"><option value="">— Select a template —</option></select>
+        <button class="btn-secondary" style="font-size:.82rem;" onclick="volApplyTemplate()">Apply</button>
+      </div>
+    </div>
+    <div style="margin-bottom:8px;">
+      <label style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:3px;">Subject *</label>
+      <input type="text" id="vol-send-subject" class="form-input" style="width:100%;" placeholder="Email subject…">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:3px;">Message *</label>
+      <textarea id="vol-send-body" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-size:.83rem;font-family:inherit;height:160px;resize:vertical;" placeholder="Type your message here…"></textarea>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <span id="vol-send-status" style="font-size:.83rem;"></span>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-secondary" style="font-size:.82rem;" onclick="closeModal('vol-send-email-modal')">Cancel</button>
+        <button class="btn-primary" style="font-size:.82rem;" id="vol-send-btn" onclick="volDoSendEmail()">Send</button>
+      </div>
     </div>
   </div>
 </div>

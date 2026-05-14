@@ -1,6 +1,11 @@
 export const JS_VOLUNTEERS = String.raw`// ── VOLUNTEERS TAB ────────────────────────────────────────────────────
 var _volCurrentTab = 'all';
 var _volDupVisible = false;
+var _volTemplates = [];
+
+// ── Ministry labels ───────────────────────────────────────────────────
+var VOL_MINISTRY_LABELS = {all:'All',worship:'Worship',events:'Events',education:'Education',
+  acceptance:'Acceptance',outreach:'Outreach',transportation:'Transportation',general:'General'};
 
 function volSetTab(tab, btn) {
   _volCurrentTab = tab;
@@ -26,9 +31,8 @@ function volLoadSignups() {
         return;
       }
       var items = res.data.signups || [];
-      var labels = {all:'All',worship:'Worship',events:'Events',education:'Education',acceptance:'Acceptance',outreach:'Outreach',general:'General'};
       var titleEl = document.getElementById('vol-signups-title');
-      if (titleEl) titleEl.innerHTML = (labels[_volCurrentTab]||_volCurrentTab) + ' Volunteers <span id="vol-signups-count" style="background:var(--navy);color:#fff;border-radius:99px;padding:1px 8px;font-size:.75rem;margin-left:4px;">' + items.length + '</span>';
+      if (titleEl) titleEl.innerHTML = (VOL_MINISTRY_LABELS[_volCurrentTab]||_volCurrentTab) + ' Volunteers <span id="vol-signups-count" style="background:var(--navy);color:#fff;border-radius:99px;padding:1px 8px;font-size:.75rem;margin-left:4px;">' + items.length + '</span>';
       if (!items.length) {
         if (listEl) listEl.innerHTML = '<div style="padding:20px 0;text-align:center;color:var(--warm-gray);">No sign-ups yet.</div>';
         return;
@@ -47,12 +51,25 @@ function volLoadSignups() {
           meta.push('<strong>Shifts:</strong> ' + shiftList);
         }
         if (s.shirt_wanted) meta.push('<strong>T-shirt:</strong> ' + (s.shirt_size || 'Yes'));
+        // Person link badge
+        var personBadge = s.person_id
+          ? '<span style="font-size:.72rem;background:rgba(46,126,166,.12);color:var(--sky-steel);border:1px solid rgba(46,126,166,.25);border-radius:6px;padding:1px 7px;cursor:pointer;" onclick="openPersonProfile(' + s.person_id + ')" title="Open profile">✓ ' + esc(s.linked_person_name || 'Person') + '</span>'
+          : '<span style="font-size:.72rem;color:var(--warm-gray);">Not in People</span>';
+        // Contact count badge
+        var contactBadge = s.contact_count > 0
+          ? '<span style="font-size:.72rem;background:rgba(39,174,96,.1);color:#1a7a3a;border:1px solid rgba(39,174,96,.25);border-radius:6px;padding:1px 7px;" title="Last: ' + esc((s.contacted_at||'').slice(0,10)) + '">✉ ' + s.contact_count + '×</span>'
+          : '';
         return '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;">'
           + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">'
           + '<div><div style="font-weight:600;font-size:.92rem;">' + esc(s.name) + '</div>'
-          + '<div style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--sky-steel);">' + esc(s.ministry) + '</div></div>'
-          + '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">'
+          + '<div style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--sky-steel);">' + esc(s.ministry) + '</div>'
+          + '<div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;">' + personBadge + (contactBadge ? ' ' + contactBadge : '') + '</div>'
+          + '</div>'
+          + '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">'
           + '<span style="font-size:.75rem;color:var(--warm-gray);">' + esc((s.created_at||'').slice(0,10)) + '</span>'
+          + '<button class="btn-secondary" style="font-size:.75rem;padding:2px 8px;" onclick="volOpenLinkPerson(' + s.id + ',' + JSON.stringify(esc(s.name)) + ',' + JSON.stringify(esc(s.email)) + ',' + (s.person_id||'null') + ',' + JSON.stringify(esc(s.linked_person_name||'')) + ')" title="Link to person record">'
+          + (s.person_id ? '↩ Relink' : '+ Link') + '</button>'
+          + (s.email ? '<button class="btn-secondary" style="font-size:.75rem;padding:2px 8px;color:var(--teal);border-color:rgba(46,126,166,.3);" onclick="volOpenSendEmail(' + s.id + ',' + JSON.stringify(esc(s.name)) + ',' + JSON.stringify(esc(s.email)) + ',' + JSON.stringify(esc(s.ministry)) + ')">✉ Email</button>' : '')
           + '<button class="btn-secondary" style="font-size:.75rem;padding:2px 8px;color:var(--danger);border-color:rgba(192,57,43,.3);" onclick="volDeleteSignup(' + s.id + ')">Remove</button>'
           + '</div></div>'
           + (meta.length ? '<div style="font-size:.82rem;color:#4A4860;margin-top:6px;line-height:1.6;">' + meta.join(' &nbsp;&bull;&nbsp; ') + '</div>' : '')
@@ -114,6 +131,253 @@ function volToggleDuplicates() {
     });
 }
 
+// ── LINK PERSON MODAL ─────────────────────────────────────────────────
+var _volLinkSignupId = 0;
+
+function volOpenLinkPerson(signupId, name, email, currentPersonId, currentPersonName) {
+  _volLinkSignupId = signupId;
+  document.getElementById('vol-link-signup-name').textContent = name;
+  var searchEl = document.getElementById('vol-link-search');
+  if (searchEl) { searchEl.value = email || name; }
+  document.getElementById('vol-link-results').innerHTML = '';
+  document.getElementById('vol-link-current').style.display = currentPersonId ? '' : 'none';
+  if (currentPersonId) {
+    document.getElementById('vol-link-current-name').textContent = currentPersonName || 'Person #' + currentPersonId;
+    document.getElementById('vol-link-current-id').textContent = currentPersonId;
+  }
+  openModal('vol-link-person-modal');
+  if (email || name) volSearchPeople();
+}
+
+function volSearchPeople() {
+  var q = (document.getElementById('vol-link-search')||{}).value || '';
+  if (!q.trim()) return;
+  var resultsEl = document.getElementById('vol-link-results');
+  if (resultsEl) resultsEl.innerHTML = '<span style="color:var(--warm-gray);font-size:.85rem;">Searching…</span>';
+  api('/admin/api/people?q=' + encodeURIComponent(q) + '&limit=10&archived=0')
+    .then(function(d) {
+      var people = d.people || [];
+      if (!people.length) {
+        if (resultsEl) resultsEl.innerHTML = '<div style="font-size:.85rem;color:var(--warm-gray);padding:6px 0;">No matches found.</div>';
+        return;
+      }
+      if (resultsEl) resultsEl.innerHTML = people.map(function(p) {
+        var label = esc(p.first_name + ' ' + p.last_name) + ' <span style="color:var(--warm-gray);font-size:.8rem;">(' + esc(p.member_type || '') + (p.email ? ' · ' + esc(p.email) : '') + ')</span>';
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--linen);">'
+          + '<span style="font-size:.85rem;">' + label + '</span>'
+          + '<button class="btn-primary" style="font-size:.75rem;padding:2px 10px;" onclick="volDoLinkPerson(' + p.id + ')">Link</button>'
+          + '</div>';
+      }).join('');
+    });
+}
+
+function volDoLinkPerson(personId) {
+  fetch('/admin/api/signups/' + _volLinkSignupId + '/link-person', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ person_id: personId })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) { alert(d.error || 'Link failed'); return; }
+    closeModal('vol-link-person-modal');
+    volLoadSignups();
+  });
+}
+
+function volDoCreatePerson() {
+  if (!confirm('Create a new Visitor profile from this sign-up data?')) return;
+  fetch('/admin/api/signups/' + _volLinkSignupId + '/link-person', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ create: true })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) { alert(d.error || 'Create failed'); return; }
+    closeModal('vol-link-person-modal');
+    volLoadSignups();
+  });
+}
+
+function volDoUnlinkPerson() {
+  if (!confirm('Remove the link to this person?')) return;
+  fetch('/admin/api/signups/' + _volLinkSignupId + '/link-person', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ person_id: null, unlink: true })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok) { alert(d.error || 'Unlink failed'); return; }
+    closeModal('vol-link-person-modal');
+    volLoadSignups();
+  });
+}
+
+// ── SEND EMAIL MODAL ──────────────────────────────────────────────────
+var _volSendSignupId = 0;
+var _volSendName = '';
+var _volSendEmail = '';
+var _volSendMinistry = '';
+
+function volOpenSendEmail(signupId, name, email, ministry) {
+  _volSendSignupId = signupId;
+  _volSendName = name;
+  _volSendEmail = email;
+  _volSendMinistry = ministry;
+  document.getElementById('vol-send-to').textContent = name + ' <' + email + '>';
+  // Reset fields
+  document.getElementById('vol-send-subject').value = '';
+  document.getElementById('vol-send-body').value = '';
+  document.getElementById('vol-send-status').textContent = '';
+  document.getElementById('vol-send-template-select').value = '';
+  openModal('vol-send-email-modal');
+  // Load templates if not yet loaded
+  if (!_volTemplates.length) {
+    volLoadTemplates(function() { volPopulateTemplateSelect(); });
+  } else {
+    volPopulateTemplateSelect();
+  }
+}
+
+function volPopulateTemplateSelect() {
+  var sel = document.getElementById('vol-send-template-select');
+  if (!sel) return;
+  // Filter to matching ministry or 'all' templates
+  var relevant = _volTemplates.filter(function(t) { return !t.ministry || t.ministry === _volSendMinistry || t.ministry === 'all'; });
+  var others = _volTemplates.filter(function(t) { return t.ministry && t.ministry !== _volSendMinistry && t.ministry !== 'all'; });
+  var options = '<option value="">— Select a template —</option>';
+  if (relevant.length) {
+    options += '<optgroup label="This ministry">' + relevant.map(function(t) { return '<option value="' + t.id + '">' + esc(t.name) + '</option>'; }).join('') + '</optgroup>';
+  }
+  if (others.length) {
+    options += '<optgroup label="Other ministries">' + others.map(function(t) { return '<option value="' + t.id + '">' + esc(t.name) + ' (' + esc(VOL_MINISTRY_LABELS[t.ministry]||t.ministry) + ')</option>'; }).join('') + '</optgroup>';
+  }
+  sel.innerHTML = options;
+}
+
+function volApplyTemplate() {
+  var sel = document.getElementById('vol-send-template-select');
+  var tid = sel ? parseInt(sel.value) : 0;
+  if (!tid) return;
+  var tmpl = _volTemplates.find(function(t) { return t.id === tid; });
+  if (!tmpl) return;
+  // Variable substitution
+  var parts = _volSendName.trim().split(/\s+/);
+  var firstName = parts[0] || _volSendName;
+  var lastName = parts.slice(1).join(' ');
+  var ministryLabel = VOL_MINISTRY_LABELS[_volSendMinistry] || _volSendMinistry || '';
+  function subst(str) {
+    return str.replace(/\{\{first_name\}\}/g, firstName)
+              .replace(/\{\{last_name\}\}/g, lastName)
+              .replace(/\{\{name\}\}/g, _volSendName)
+              .replace(/\{\{ministry\}\}/g, ministryLabel);
+  }
+  document.getElementById('vol-send-subject').value = subst(tmpl.subject);
+  document.getElementById('vol-send-body').value = subst(tmpl.body);
+}
+
+function volDoSendEmail() {
+  var subject = (document.getElementById('vol-send-subject').value || '').trim();
+  var body    = (document.getElementById('vol-send-body').value    || '').trim();
+  var statusEl = document.getElementById('vol-send-status');
+  if (!subject || !body) { if (statusEl) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = 'Subject and message are required.'; } return; }
+  var btn = document.getElementById('vol-send-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  if (statusEl) { statusEl.style.color = ''; statusEl.textContent = ''; }
+  fetch('/admin/api/signups/' + _volSendSignupId + '/send-email', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subject: subject, body: body })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+    if (d.ok) {
+      if (statusEl) { statusEl.style.color = 'var(--teal)'; statusEl.textContent = '✓ Sent to ' + _volSendEmail; }
+      setTimeout(function() { closeModal('vol-send-email-modal'); volLoadSignups(); }, 1200);
+    } else {
+      if (statusEl) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = d.error || 'Send failed.'; }
+    }
+  }).catch(function() {
+    if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+    if (statusEl) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = 'Network error.'; }
+  });
+}
+
+// ── EMAIL TEMPLATE MANAGEMENT ─────────────────────────────────────────
+var _volEditingTemplateId = 0;
+
+function volLoadTemplates(cb) {
+  api('/admin/api/volunteer-templates').then(function(d) {
+    _volTemplates = d.templates || [];
+    volRenderTemplates();
+    if (cb) cb();
+  });
+}
+
+function volRenderTemplates() {
+  var listEl = document.getElementById('vol-templates-list');
+  if (!listEl) return;
+  if (!_volTemplates.length) {
+    listEl.innerHTML = '<div style="font-size:.85rem;color:var(--warm-gray);padding:10px 0;">No templates yet. Add one below.</div>';
+    return;
+  }
+  listEl.innerHTML = _volTemplates.map(function(t) {
+    var ministryLabel = t.ministry ? ' <span style="font-size:.72rem;color:var(--sky-steel);text-transform:uppercase;letter-spacing:.05em;">(' + esc(VOL_MINISTRY_LABELS[t.ministry]||t.ministry) + ')</span>' : '';
+    return '<div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">'
+      + '<div style="min-width:0;">'
+      + '<div style="font-weight:600;font-size:.88rem;">' + esc(t.name) + ministryLabel + '</div>'
+      + '<div style="font-size:.8rem;color:#6A6880;margin-top:2px;">' + esc(t.subject) + '</div>'
+      + '</div>'
+      + '<div style="display:flex;gap:5px;flex-shrink:0;">'
+      + '<button class="btn-secondary" style="font-size:.75rem;padding:2px 8px;" onclick="volEditTemplate(' + t.id + ')">Edit</button>'
+      + '<button class="btn-secondary" style="font-size:.75rem;padding:2px 8px;color:var(--danger);border-color:rgba(192,57,43,.3);" onclick="volDeleteTemplate(' + t.id + ')">Del</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function volEditTemplate(id) {
+  var tmpl = _volTemplates.find(function(t) { return t.id === id; });
+  if (!tmpl) return;
+  _volEditingTemplateId = id;
+  document.getElementById('vol-tmpl-name').value = tmpl.name;
+  document.getElementById('vol-tmpl-ministry').value = tmpl.ministry || '';
+  document.getElementById('vol-tmpl-subject').value = tmpl.subject;
+  document.getElementById('vol-tmpl-body').value = tmpl.body;
+  document.getElementById('vol-tmpl-save-btn').textContent = 'Save Changes';
+  document.getElementById('vol-tmpl-cancel-btn').style.display = '';
+  document.getElementById('vol-tmpl-form').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function volCancelEditTemplate() {
+  _volEditingTemplateId = 0;
+  ['vol-tmpl-name','vol-tmpl-subject','vol-tmpl-body'].forEach(function(id){ var el=document.getElementById(id); if(el)el.value=''; });
+  document.getElementById('vol-tmpl-ministry').value = '';
+  document.getElementById('vol-tmpl-save-btn').textContent = 'Add Template';
+  document.getElementById('vol-tmpl-cancel-btn').style.display = 'none';
+}
+
+function volSaveTemplate() {
+  var name    = (document.getElementById('vol-tmpl-name').value || '').trim();
+  var ministry= (document.getElementById('vol-tmpl-ministry').value || '');
+  var subject = (document.getElementById('vol-tmpl-subject').value || '').trim();
+  var body    = (document.getElementById('vol-tmpl-body').value || '').trim();
+  if (!name || !subject || !body) { alert('Name, subject, and body are required.'); return; }
+  var method = _volEditingTemplateId ? 'PUT' : 'POST';
+  var url = '/admin/api/volunteer-templates' + (_volEditingTemplateId ? '/' + _volEditingTemplateId : '');
+  fetch(url, {
+    method: method, credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, ministry: ministry, subject: subject, body: body })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (!d.ok && !d.id) { alert(d.error || 'Save failed'); return; }
+    volCancelEditTemplate();
+    volLoadTemplates();
+  });
+}
+
+function volDeleteTemplate(id) {
+  if (!confirm('Delete this template?')) return;
+  fetch('/admin/api/volunteer-templates/' + id, { method: 'DELETE', credentials: 'same-origin' })
+    .then(function() { volLoadTemplates(); });
+}
+
+// ── EVENTS ────────────────────────────────────────────────────────────
 function volLoadEvents(expandEvId) {
   fetch('/admin/api/events', { credentials: 'same-origin' })
     .then(function(r) { return r.json(); })
@@ -364,8 +628,4 @@ function volAddRole(evId) {
     volLoadEvents(evId);
   }).catch(function(e){alert('Error: '+e);});
 }
-</script>
-</body>
-</html>
-
 `;

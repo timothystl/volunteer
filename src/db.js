@@ -35,7 +35,10 @@ export const DB_INIT = [
     shirt_wanted INTEGER NOT NULL DEFAULT 0,
     shirt_size TEXT NOT NULL DEFAULT '',
     notes TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    person_id INTEGER DEFAULT NULL,
+    contacted_at TEXT NOT NULL DEFAULT '',
+    contact_count INTEGER NOT NULL DEFAULT 0
   )`,
   `CREATE TABLE IF NOT EXISTS signup_slots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -250,7 +253,16 @@ export const DB_INIT = [
     used        INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
   )`,
-  `CREATE INDEX IF NOT EXISTS idx_member_tokens_people ON member_invite_tokens(people_id)`
+  `CREATE INDEX IF NOT EXISTS idx_member_tokens_people ON member_invite_tokens(people_id)`,
+  // Volunteer outreach email templates
+  `CREATE TABLE IF NOT EXISTS volunteer_email_templates (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL DEFAULT '',
+    ministry   TEXT NOT NULL DEFAULT '',
+    subject    TEXT NOT NULL DEFAULT '',
+    body       TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`
 ];
 
 
@@ -543,6 +555,16 @@ async function _doInitDb(db) {
     'ALTER TABLE app_users ADD COLUMN push_subscription TEXT NOT NULL DEFAULT ""',
     // people: once edited locally, bulk Breeze sync will not overwrite name/contact/address/etc.
     'ALTER TABLE people ADD COLUMN locally_edited INTEGER NOT NULL DEFAULT 0',
+    // volunteer messaging: link signups to people records, track contact history
+    'ALTER TABLE signups ADD COLUMN person_id INTEGER DEFAULT NULL',
+    'ALTER TABLE signups ADD COLUMN contacted_at TEXT NOT NULL DEFAULT ""',
+    'ALTER TABLE signups ADD COLUMN contact_count INTEGER NOT NULL DEFAULT 0',
+    // volunteer email templates for outreach form letters
+    `CREATE TABLE IF NOT EXISTS volunteer_email_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL DEFAULT '',
+      ministry TEXT NOT NULL DEFAULT '', subject TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
   ];
   for (const m of migrations) {
     try { await db.prepare(m).run(); } catch(e) { /* column already exists */ }
