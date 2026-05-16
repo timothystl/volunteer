@@ -559,13 +559,14 @@ function showProfile(p) {
       + '</div>';
     api('/admin/api/giving?person_id='+p.id+'&limit=500').then(function(d) {
       var entries = (d && d.entries) ? d.entries : (Array.isArray(d) ? d : []);
-      var total = entries.reduce(function(s,e){return s+(e.amount||0);},0);
       var ag = document.getElementById('pv-aside-giving');
       var curYear = new Date().getFullYear().toString();
       var pid = p.id;
-      if (ag) ag.innerHTML = '<div class="pv-aside-lbl">Total Giving</div>'
-        + '<div class="pv-aside-big">$'+(total/100).toFixed(2)+'</div>'
-        + '<div class="pv-aside-sub">'+entries.length+' gift'+(entries.length!==1?'s':'')+'</div>'
+      var ytdEntries = entries.filter(function(e){ return (e.contribution_date||'').slice(0,4)===curYear; });
+      var ytdTotal = ytdEntries.reduce(function(s,e){return s+(e.amount||0);},0);
+      if (ag) ag.innerHTML = '<div class="pv-aside-lbl">'+curYear+' Giving</div>'
+        + '<div class="pv-aside-big">$'+(ytdTotal/100).toFixed(2)+'</div>'
+        + '<div class="pv-aside-sub">'+ytdEntries.length+' gift'+(ytdEntries.length!==1?'s':'')+'</div>'
         + (entries.length ? '<div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;">'
           + '<button class="btn-secondary" style="font-size:.75rem;padding:3px 9px;width:100%;" onclick="showPvTab(\'giving\')">View All Gifts</button>'
           + '<button class="btn-secondary" style="font-size:.75rem;padding:3px 9px;width:100%;" onclick="sendGivingStatement('+pid+',\''+curYear+'\')">&#9993; Send Statement</button>'
@@ -1636,11 +1637,13 @@ function deleteGivingEntry(entryId, filterYear) {
       _pvGivingEntries = _pvGivingEntries.filter(function(e){return e.id !== entryId;});
       renderPvGiving(filterYear);
       // Refresh aside total
-      var total = _pvGivingEntries.reduce(function(s,e){return s+(e.amount||0);},0);
       var ag = document.getElementById('pv-aside-giving');
-      if (ag) ag.innerHTML = '<div class="pv-aside-lbl">Total Giving</div>'
-        + '<div class="pv-aside-big">$'+(total/100).toFixed(2)+'</div>'
-        + '<div class="pv-aside-sub">'+_pvGivingEntries.length+' gift'+(_pvGivingEntries.length!==1?'s':'')+'</div>';
+      var curYear = new Date().getFullYear().toString();
+      var ytdEntries = _pvGivingEntries.filter(function(e){ return (e.contribution_date||'').slice(0,4)===curYear; });
+      var ytdTotal = ytdEntries.reduce(function(s,e){return s+(e.amount||0);},0);
+      if (ag) ag.innerHTML = '<div class="pv-aside-lbl">'+curYear+' Giving</div>'
+        + '<div class="pv-aside-big">$'+(ytdTotal/100).toFixed(2)+'</div>'
+        + '<div class="pv-aside-sub">'+ytdEntries.length+' gift'+(ytdEntries.length!==1?'s':'')+'</div>';
     } else {
       alert('Error: '+(r && r.error ? r.error : 'Could not delete entry'));
     }
