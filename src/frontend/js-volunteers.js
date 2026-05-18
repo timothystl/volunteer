@@ -2,6 +2,7 @@ export const JS_VOLUNTEERS = String.raw`// ── VOLUNTEERS TAB ─────
 var _volCurrentTab = 'all';
 var _volDupVisible = false;
 var _volTemplates = [];
+var _volSignupsCache = [];
 
 // ── Ministry labels ───────────────────────────────────────────────────
 var VOL_MINISTRY_LABELS = {all:'All',worship:'Worship',events:'Events',education:'Education',
@@ -31,6 +32,7 @@ function volLoadSignups() {
         return;
       }
       var items = res.data.signups || [];
+      _volSignupsCache = items;
       var titleEl = document.getElementById('vol-signups-title');
       if (titleEl) titleEl.innerHTML = (VOL_MINISTRY_LABELS[_volCurrentTab]||_volCurrentTab) + ' Volunteers <span id="vol-signups-count" style="background:var(--navy);color:#fff;border-radius:99px;padding:1px 8px;font-size:.75rem;margin-left:4px;">' + items.length + '</span>';
       if (!items.length) {
@@ -214,12 +216,28 @@ var _volSendSignupId = 0;
 var _volSendName = '';
 var _volSendEmail = '';
 var _volSendMinistry = '';
+var _volSendRoles = '';
+var _volSendService = '';
+var _volSendSundays = '';
+var _volSendNotes = '';
 
 function volOpenSendEmail(signupId, name, email, ministry) {
   _volSendSignupId = signupId;
   _volSendName = name;
   _volSendEmail = email;
   _volSendMinistry = ministry;
+  // Look up extra signup data from cache
+  var cached = _volSignupsCache.find(function(s) { return s.id === signupId; });
+  if (cached) {
+    var roles = []; try { roles = JSON.parse(cached.roles || '[]'); } catch {}
+    var sundays = []; try { sundays = JSON.parse(cached.sundays || '[]'); } catch {}
+    _volSendRoles   = roles.join(', ');
+    _volSendService = cached.service || '';
+    _volSendSundays = sundays.join(', ');
+    _volSendNotes   = cached.notes || '';
+  } else {
+    _volSendRoles = _volSendService = _volSendSundays = _volSendNotes = '';
+  }
   document.getElementById('vol-send-to').textContent = name + ' <' + email + '>';
   // Reset fields
   document.getElementById('vol-send-subject').value = '';
@@ -266,7 +284,11 @@ function volApplyTemplate() {
     return str.replace(/\{\{first_name\}\}/g, firstName)
               .replace(/\{\{last_name\}\}/g, lastName)
               .replace(/\{\{name\}\}/g, _volSendName)
-              .replace(/\{\{ministry\}\}/g, ministryLabel);
+              .replace(/\{\{ministry\}\}/g, ministryLabel)
+              .replace(/\{\{roles\}\}/g, _volSendRoles)
+              .replace(/\{\{service\}\}/g, _volSendService)
+              .replace(/\{\{sundays\}\}/g, _volSendSundays)
+              .replace(/\{\{notes\}\}/g, _volSendNotes);
   }
   document.getElementById('vol-send-subject').value = subst(tmpl.subject);
   document.getElementById('vol-send-body').value = subst(tmpl.body);

@@ -691,7 +691,7 @@ export const HTML_TABS_1 = String.raw`<!-- ═══ HOME / DASHBOARD TAB ══
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
         <div>
           <h3 style="font-size:1rem;font-weight:600;color:var(--charcoal);margin-bottom:2px;">Outreach Email Templates</h3>
-          <p style="font-size:.8rem;color:var(--warm-gray);margin:0;">Reusable form letters for welcoming volunteers to a ministry. Use <code style="font-size:.78rem;">{{first_name}}</code>, <code style="font-size:.78rem;">{{name}}</code>, <code style="font-size:.78rem;">{{ministry}}</code> as variables.</p>
+          <p style="font-size:.8rem;color:var(--warm-gray);margin:0;">Reusable form letters for welcoming volunteers. Variables: <code style="font-size:.78rem;">{{first_name}}</code> <code style="font-size:.78rem;">{{last_name}}</code> <code style="font-size:.78rem;">{{name}}</code> <code style="font-size:.78rem;">{{ministry}}</code> <code style="font-size:.78rem;">{{roles}}</code> <code style="font-size:.78rem;">{{service}}</code> <code style="font-size:.78rem;">{{sundays}}</code> <code style="font-size:.78rem;">{{notes}}</code></p>
         </div>
       </div>
       <div id="vol-templates-list" style="margin-bottom:12px;"></div>
