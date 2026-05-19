@@ -23,7 +23,7 @@ function loadHouseholds(resetPage) {
     _hhTotal = d.total || 0;
     renderHouseholds(d.households || []);
     renderHouseholdPager();
-  });
+  }).catch(function() { setStatus('h-status', 'Error loading households.', 'err'); });
 }
 function renderHouseholdPager() {
   var el = document.getElementById('h-pager');
@@ -314,6 +314,9 @@ function loadOrganizations(reset) {
         + '<span style="font-size:.82rem;color:var(--warm-gray);">' + (offset+1) + '–' + Math.min(offset+_orgLimit,_orgTotal) + ' of ' + _orgTotal + '</span>'
         + (cur < pages-1 ? '<button class="btn-sm" onclick="_orgPage++;loadOrganizations()">Next &#8250;</button>' : '');
     }
+  }).catch(function() {
+    var grid = document.getElementById('org-grid');
+    if (grid) grid.innerHTML = '<div style="color:var(--danger);padding:32px;text-align:center;">Error loading organizations.</div>';
   });
 }
 function openOrgRow(idx) {

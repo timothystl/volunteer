@@ -120,7 +120,7 @@ var _rptResizeMoveH = function(e) {
           markers2+='<line x1="'+ex.toFixed(1)+'" y1="'+pT+'" x2="'+ex.toFixed(1)+'" y2="'+(H2-pB)+'" stroke="'+color+'" stroke-width="1" stroke-dasharray="3,3" opacity="0.55"><title>Easter '+yr+': '+mShort[ed.month-1]+' '+ed.day+'</title></line>';
           markers2+='<text x="'+ex.toFixed(1)+'" y="'+(pT+9)+'" text-anchor="middle" fill="'+color+'" font-size="9" font-weight="700" opacity="0.75">E</text>';
         });
-        var cx2=xAtDate2(2026,12,25);
+        var _xmasYear=parseInt((_lastGivingTrendData.years||[]).slice(-1)[0]||new Date().getFullYear());var cx2=xAtDate2(_xmasYear,12,25);
         markers2+='<line x1="'+cx2.toFixed(1)+'" y1="'+pT+'" x2="'+cx2.toFixed(1)+'" y2="'+(H2-pB)+'" stroke="#8a7968" stroke-width="1" stroke-dasharray="4,3" opacity="0.6"><title>Christmas: Dec 25</title></line>';
         markers2+='<text x="'+cx2.toFixed(1)+'" y="'+(pT+9)+'" text-anchor="middle" fill="#8a7968" font-size="9" font-weight="700" opacity="0.8">C</text>';
         w.innerHTML='<svg viewBox="0 0 '+W2+' '+H2+'" style="width:100%;height:'+H2+'px;">'+grid2+markers2+lines2+xlbls2+ylbls2+'</svg>';

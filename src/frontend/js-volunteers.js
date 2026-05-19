@@ -24,14 +24,9 @@ function volLoadSignups() {
   var url = '/admin/api/signups' + (_volCurrentTab !== 'all' ? '?ministry=' + _volCurrentTab : '');
   var listEl = document.getElementById('vol-signups-list');
   if (listEl) listEl.innerHTML = '<span style="color:var(--warm-gray);">Loading…</span>';
-  fetch(url, { credentials: 'same-origin' })
-    .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
-    .then(function(res) {
-      if (!res.ok) {
-        if (listEl) listEl.innerHTML = '<span style="color:var(--danger);">Error loading sign-ups.</span>';
-        return;
-      }
-      var items = res.data.signups || [];
+  api(url)
+    .then(function(d) {
+      var items = d.signups || [];
       _volSignupsCache = items;
       var titleEl = document.getElementById('vol-signups-title');
       if (titleEl) titleEl.innerHTML = (VOL_MINISTRY_LABELS[_volCurrentTab]||_volCurrentTab) + ' Volunteers <span id="vol-signups-count" style="background:var(--navy);color:#fff;border-radius:99px;padding:1px 8px;font-size:.75rem;margin-left:4px;">' + items.length + '</span>';
@@ -71,7 +66,7 @@ function volLoadSignups() {
           + '<span style="font-size:.75rem;color:var(--warm-gray);">' + esc((s.created_at||'').slice(0,10)) + '</span>'
           + '<button class="btn-secondary" style="font-size:.75rem;padding:2px 8px;" onclick="volOpenLinkPerson(' + s.id + ',' + JSON.stringify(esc(s.name)) + ',' + JSON.stringify(esc(s.email)) + ',' + (s.person_id||'null') + ',' + JSON.stringify(esc(s.linked_person_name||'')) + ')" title="Link to person record">'
           + (s.person_id ? '↩ Relink' : '+ Link') + '</button>'
-          + (s.email ? '<button class="btn-secondary" style="font-size:.75rem;padding:2px 8px;color:var(--teal);border-color:rgba(46,126,166,.3);" onclick="volOpenSendEmail(' + s.id + ',' + JSON.stringify(esc(s.name)) + ',' + JSON.stringify(esc(s.email)) + ',' + JSON.stringify(esc(s.ministry)) + ')">✉ Email</button>' : '')
+          + (s.email ? '<button class="btn-secondary" style="font-size:.75rem;padding:2px 8px;color:var(--teal);border-color:rgba(46,126,166,.3);" data-sig-id="' + s.id + '" data-sig-name="' + esc(s.name) + '" data-sig-email="' + esc(s.email) + '" data-sig-ministry="' + esc(s.ministry) + '" onclick="volOpenSendEmail(this)">✉ Email</button>' : '')
           + '<button class="btn-secondary" style="font-size:.75rem;padding:2px 8px;color:var(--danger);border-color:rgba(192,57,43,.3);" onclick="volDeleteSignup(' + s.id + ')">Remove</button>'
           + '</div></div>'
           + (meta.length ? '<div style="font-size:.82rem;color:#4A4860;margin-top:6px;line-height:1.6;">' + meta.join(' &nbsp;&bull;&nbsp; ') + '</div>' : '')
@@ -85,7 +80,7 @@ function volLoadSignups() {
 
 function volDeleteSignup(id) {
   if (!confirm('Remove this volunteer sign-up?')) return;
-  fetch('/admin/api/signups/' + id, { method: 'DELETE', credentials: 'same-origin' })
+  api('/admin/api/signups/' + id, { method: 'DELETE' })
     .then(function() { volLoadSignups(); });
 }
 
@@ -95,8 +90,7 @@ function volToggleDuplicates() {
   var btn = document.getElementById('vol-dup-btn');
   if (!_volDupVisible) { panel.style.display = 'none'; if (btn) btn.textContent = 'Show Duplicates'; return; }
   if (btn) btn.textContent = 'Hide Duplicates';
-  fetch('/admin/api/signups', { credentials: 'same-origin' })
-    .then(function(r) { return r.json(); })
+  api('/admin/api/signups')
     .then(function(data) {
       var items = data.signups || [];
       var byEmail = {};
@@ -174,11 +168,10 @@ function volSearchPeople() {
 }
 
 function volDoLinkPerson(personId) {
-  fetch('/admin/api/signups/' + _volLinkSignupId + '/link-person', {
-    method: 'POST', credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
+  api('/admin/api/signups/' + _volLinkSignupId + '/link-person', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ person_id: personId })
-  }).then(function(r) { return r.json(); }).then(function(d) {
+  }).then(function(d) {
     if (!d.ok) { alert(d.error || 'Link failed'); return; }
     closeModal('vol-link-person-modal');
     volLoadSignups();
@@ -187,11 +180,10 @@ function volDoLinkPerson(personId) {
 
 function volDoCreatePerson() {
   if (!confirm('Create a new Visitor profile from this sign-up data?')) return;
-  fetch('/admin/api/signups/' + _volLinkSignupId + '/link-person', {
-    method: 'POST', credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
+  api('/admin/api/signups/' + _volLinkSignupId + '/link-person', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ create: true })
-  }).then(function(r) { return r.json(); }).then(function(d) {
+  }).then(function(d) {
     if (!d.ok) { alert(d.error || 'Create failed'); return; }
     closeModal('vol-link-person-modal');
     volLoadSignups();
@@ -200,11 +192,10 @@ function volDoCreatePerson() {
 
 function volDoUnlinkPerson() {
   if (!confirm('Remove the link to this person?')) return;
-  fetch('/admin/api/signups/' + _volLinkSignupId + '/link-person', {
-    method: 'POST', credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
+  api('/admin/api/signups/' + _volLinkSignupId + '/link-person', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ person_id: null, unlink: true })
-  }).then(function(r) { return r.json(); }).then(function(d) {
+  }).then(function(d) {
     if (!d.ok) { alert(d.error || 'Unlink failed'); return; }
     closeModal('vol-link-person-modal');
     volLoadSignups();
@@ -221,7 +212,11 @@ var _volSendService = '';
 var _volSendSundays = '';
 var _volSendNotes = '';
 
-function volOpenSendEmail(signupId, name, email, ministry) {
+function volOpenSendEmail(btn) {
+  var signupId = btn.dataset.sigId;
+  var name     = btn.dataset.sigName;
+  var email    = btn.dataset.sigEmail;
+  var ministry = btn.dataset.sigMinistry;
   _volSendSignupId = signupId;
   _volSendName = name;
   _volSendEmail = email;
@@ -302,11 +297,10 @@ function volDoSendEmail() {
   var btn = document.getElementById('vol-send-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
   if (statusEl) { statusEl.style.color = ''; statusEl.textContent = ''; }
-  fetch('/admin/api/signups/' + _volSendSignupId + '/send-email', {
-    method: 'POST', credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
+  api('/admin/api/signups/' + _volSendSignupId + '/send-email', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ subject: subject, body: body })
-  }).then(function(r) { return r.json(); }).then(function(d) {
+  }).then(function(d) {
     if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
     if (d.ok) {
       if (statusEl) { statusEl.style.color = 'var(--teal)'; statusEl.textContent = '✓ Sent to ' + _volSendEmail; }
@@ -382,11 +376,10 @@ function volSaveTemplate() {
   if (!name || !subject || !body) { alert('Name, subject, and body are required.'); return; }
   var method = _volEditingTemplateId ? 'PUT' : 'POST';
   var url = '/admin/api/volunteer-templates' + (_volEditingTemplateId ? '/' + _volEditingTemplateId : '');
-  fetch(url, {
-    method: method, credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
+  api(url, {
+    method: method, headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: name, ministry: ministry, subject: subject, body: body })
-  }).then(function(r) { return r.json(); }).then(function(d) {
+  }).then(function(d) {
     if (!d.ok && !d.id) { alert(d.error || 'Save failed'); return; }
     volCancelEditTemplate();
     volLoadTemplates();
@@ -395,14 +388,13 @@ function volSaveTemplate() {
 
 function volDeleteTemplate(id) {
   if (!confirm('Delete this template?')) return;
-  fetch('/admin/api/volunteer-templates/' + id, { method: 'DELETE', credentials: 'same-origin' })
+  api('/admin/api/volunteer-templates/' + id, { method: 'DELETE' })
     .then(function() { volLoadTemplates(); });
 }
 
 // ── EVENTS ────────────────────────────────────────────────────────────
 function volLoadEvents(expandEvId) {
-  fetch('/admin/api/events', { credentials: 'same-origin' })
-    .then(function(r) { return r.json(); })
+  api('/admin/api/events')
     .then(function(data) {
       var events = data.events || [];
       var cntEl = document.getElementById('vol-events-count');
@@ -542,12 +534,11 @@ function volSaveEvent(evId) {
   var sortOrder = card ? parseInt(card.dataset.sortOrder||'0',10) : 0;
   var tsEl = document.getElementById('vol-ev-ts-' + evId);
   var useTimeSlots = tsEl ? (tsEl.checked?1:0) : 1;
-  fetch('/admin/api/events/' + evId, {
-    method:'PUT', credentials:'same-origin',
-    headers:{'Content-Type':'application/json'},
+  api('/admin/api/events/' + evId, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name:name,event_date:date,description:desc,hidden:hidden,sort_order:sortOrder,use_time_slots:useTimeSlots})
-  }).then(function(r) {
-    if (!r.ok) { r.text().then(function(t){alert('Save failed: '+t);}); return; }
+  }).then(function(d) {
+    if (!d.ok) { alert('Save failed: ' + (d.error || 'Unknown error')); return; }
     volLoadEvents(evId);
   }).catch(function(e){alert('Save error: '+e);});
 }
@@ -560,19 +551,18 @@ function volToggleEventVisibility(evId, hidden) {
   var sortOrder = card ? parseInt(card.dataset.sortOrder||'0',10) : 0;
   var tsEl = document.getElementById('vol-ev-ts-' + evId);
   var useTimeSlots = tsEl ? (tsEl.checked?1:0) : 1;
-  fetch('/admin/api/events/' + evId, {
-    method:'PUT', credentials:'same-origin',
-    headers:{'Content-Type':'application/json'},
+  api('/admin/api/events/' + evId, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name:name,event_date:date,description:desc,hidden:hidden,sort_order:sortOrder,use_time_slots:useTimeSlots})
-  }).then(function(r) {
-    if (!r.ok) { r.text().then(function(t){alert('Error: '+t);}); return; }
+  }).then(function(d) {
+    if (!d.ok) { alert('Error: ' + (d.error || 'Unknown error')); return; }
     volLoadEvents();
   }).catch(function(e){alert('Error: '+e);});
 }
 
 function volDeleteEvent(evId) {
   if (!confirm('Delete this event and all its roles? This cannot be undone.')) return;
-  fetch('/admin/api/events/' + evId, {method:'DELETE', credentials:'same-origin'})
+  api('/admin/api/events/' + evId, {method:'DELETE'})
     .then(function(){volLoadEvents();});
 }
 
@@ -589,11 +579,10 @@ function volSaveNewEvent() {
   var desc = (document.getElementById('vol-new-ev-desc')||{}).value || '';
   var tsEl = document.getElementById('vol-new-ev-time-slots');
   var useTimeSlots = tsEl ? (tsEl.checked?1:0) : 1;
-  fetch('/admin/api/events', {
-    method:'POST', credentials:'same-origin',
-    headers:{'Content-Type':'application/json'},
+  api('/admin/api/events', {
+    method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name:name,event_date:date,description:desc,use_time_slots:useTimeSlots})
-  }).then(function(r){return r.json();}).then(function(d){
+  }).then(function(d){
     ['vol-new-ev-name','vol-new-ev-date','vol-new-ev-desc'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
     if (tsEl) tsEl.checked = true;
     document.getElementById('vol-add-event-form').style.display = 'none';
@@ -614,12 +603,11 @@ function volSaveRole(evId, roleId) {
   var sortOrder = row ? parseInt(row.dataset.sortOrder||'0',10) : 0;
   var saveBtn = row ? row.querySelector('.btn-secondary') : null;
   if (saveBtn) { saveBtn.disabled=true; saveBtn.textContent='Saving…'; }
-  fetch('/admin/api/events/' + evId + '/roles/' + roleId, {
-    method:'PUT', credentials:'same-origin',
-    headers:{'Content-Type':'application/json'},
+  api('/admin/api/events/' + evId + '/roles/' + roleId, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name:name,description:desc,slots:slots,role_date:date,start_time:start,end_time:end,sort_order:sortOrder})
-  }).then(function(resp) {
-    if (!resp.ok) { alert('Error saving role.'); if (saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save';} return; }
+  }).then(function(d) {
+    if (!d.ok) { alert('Error saving role.'); if (saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save';} return; }
     if (startEl && startEl.value) startEl.dataset.raw = start;
     if (endEl   && endEl.value)   endEl.dataset.raw   = end;
     if (saveBtn) { saveBtn.textContent='Saved!'; saveBtn.style.background='var(--teal)'; saveBtn.style.color='#fff'; setTimeout(function(){saveBtn.disabled=false;saveBtn.textContent='Save';saveBtn.style.background='';saveBtn.style.color='';},1500); }
@@ -628,7 +616,7 @@ function volSaveRole(evId, roleId) {
 
 function volDeleteRole(evId, roleId) {
   if (!confirm('Delete this role?')) return;
-  fetch('/admin/api/events/' + evId + '/roles/' + roleId, {method:'DELETE', credentials:'same-origin'})
+  api('/admin/api/events/' + evId + '/roles/' + roleId, {method:'DELETE'})
     .then(function(){volLoadEvents(evId);});
 }
 
@@ -640,12 +628,11 @@ function volAddRole(evId) {
   var end   = volFromTimeInput((document.getElementById('vol-new-role-end-'  +evId)||{}).value||'');
   var slots = parseInt((document.getElementById('vol-new-role-slots-'+evId)||{}).value||'0',10);
   if (!name.trim()) { alert('Please enter a role name.'); return; }
-  fetch('/admin/api/events/' + evId + '/roles', {
-    method:'POST', credentials:'same-origin',
-    headers:{'Content-Type':'application/json'},
+  api('/admin/api/events/' + evId + '/roles', {
+    method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name:name,description:desc,slots:slots,role_date:date,start_time:start,end_time:end})
-  }).then(function(r){
-    if (!r.ok){r.text().then(function(t){alert('Add role failed: '+t);});return;}
+  }).then(function(d){
+    if (!d.ok){alert('Add role failed: ' + (d.error||'Unknown error'));return;}
     ['vol-new-role-name-','vol-new-role-desc-','vol-new-role-date-','vol-new-role-start-','vol-new-role-end-','vol-new-role-slots-'].forEach(function(pfx){var el=document.getElementById(pfx+evId);if(el)el.value='';});
     volLoadEvents(evId);
   }).catch(function(e){alert('Error: '+e);});
