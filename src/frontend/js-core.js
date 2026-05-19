@@ -1,6 +1,6 @@
 export const JS_CORE = String.raw`<script>
 // ── DEPLOY VERSION ───────────────────────────────────────────────────
-var DEPLOY_VERSION = '2026-05-19-v216';
+var DEPLOY_VERSION = '2026-05-19-v217';
 window.onerror = function(msg, src, line, col, err) {
   // Benign browser quirks — suppress these and don't show the error banner.
   if (msg && String(msg).indexOf('ResizeObserver loop') !== -1) return true;
@@ -79,7 +79,7 @@ function fmtDate(iso) {
   return parseInt(p[1]) + '/' + parseInt(p[2]) + '/' + p[0];
 }
 function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 function setStatus(id, msg, type) {
   var el = document.getElementById(id);

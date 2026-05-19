@@ -262,10 +262,11 @@ async function validateAddressCore(addr, env, uspsToken) {
 }
 
 // ── UTILS API HANDLER ─────────────────────────────────────────────────────
-export async function handleUtilsApi(req, env, url, method, seg, db, isAdmin) {
+export async function handleUtilsApi(req, env, url, method, seg, db, isAdmin, canEdit) {
 
   // POST /admin/api/utils/validate-address
   if (seg === 'utils/validate-address' && method === 'POST') {
+    if (!canEdit) return json({ error: 'Access denied' }, 403);
     let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
     if (!(b.address1 || '').trim()) return json({ error: 'address1 is required' }, 400);
     try {

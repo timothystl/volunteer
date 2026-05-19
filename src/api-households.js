@@ -10,17 +10,20 @@ export async function handleHouseholdsApi(req, env, url, method, seg, db, isAdmi
     const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
     const offset = parseInt(url.searchParams.get('offset') || '0');
     const sort = url.searchParams.get('sort') || 'name';
-    const hhMemberType = (url.searchParams.get('member_type') || '').toLowerCase().trim();
+    const hhMemberTypeRaw = (url.searchParams.get('member_type') || '').toLowerCase().trim();
+    const validMemberTypes = ['member','visitor','regular_attender','friend'];
+    const hhMemberType = validMemberTypes.includes(hhMemberTypeRaw) ? hhMemberTypeRaw : '';
     const orderBy = sort === 'members_desc' ? 'member_count DESC, h.name'
                   : sort === 'members_asc'  ? 'member_count ASC, h.name'
                   : 'h.name';
     // HV1: optional member-type filter — only show households with ≥1 person of the given type
     const mtSubquery = hhMemberType
-      ? `AND h.id IN (SELECT household_id FROM people WHERE active=1 AND LOWER(member_type)='${hhMemberType}' AND household_id IS NOT NULL AND household_id != '')`
+      ? `AND h.id IN (SELECT household_id FROM people WHERE active=1 AND LOWER(member_type)=? AND household_id IS NOT NULL AND household_id != '')`
       : '';
+    const countBinds = hhMemberType ? [q,q,q,hhMemberType] : [q,q,q];
     const countRow = await db.prepare(
       `SELECT COUNT(*) as n FROM households h WHERE (h.name LIKE ? OR h.address1 LIKE ? OR h.city LIKE ?) ${mtSubquery}`
-    ).bind(q,q,q).first();
+    ).bind(...countBinds).first();
     const total = countRow?.n || 0;
     const rows = (await db.prepare(
       `SELECT h.*, COUNT(p.id) as member_count,
@@ -34,7 +37,7 @@ export async function handleHouseholdsApi(req, env, url, method, seg, db, isAdmi
        LEFT JOIN people p ON p.household_id=h.id AND p.active=1
        WHERE (h.name LIKE ? OR h.address1 LIKE ? OR h.city LIKE ?) ${mtSubquery}
        GROUP BY h.id ORDER BY ${orderBy} LIMIT ? OFFSET ?`
-    ).bind(q,q,q,limit,offset).all()).results || [];
+    ).bind(...(hhMemberType ? [q,q,q,hhMemberType,limit,offset] : [q,q,q,limit,offset])).all()).results || [];
     // HQ4: compute display_name for households whose name is shared by another household
     const dupNameSet = new Set(
       ((await db.prepare(`SELECT LOWER(name) as n FROM households GROUP BY LOWER(name) HAVING COUNT(*)>1`).all()).results || []).map(r => r.n)

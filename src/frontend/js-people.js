@@ -582,8 +582,13 @@ function pvRow(key, val) {
     + '<div class="pv-row-val'+(val?'':' empty')+'">'+(val||'—')+'</div></div>';
 }
 function pvField(label, val) {
+  var safe = val ? esc(val) : '';
   return '<div class="pv-field-card"><div class="pv-field-card-lbl">'+label+'</div>'
-    + '<div class="pv-field-card-val'+(val?'':' empty')+'">'+(val||'—')+'</div></div>';
+    + '<div class="pv-field-card-val'+(val?'':' empty')+'">'+(safe||'—')+'</div></div>';
+}
+function pvFieldHtml(label, html) {
+  return '<div class="pv-field-card"><div class="pv-field-card-lbl">'+label+'</div>'
+    + '<div class="pv-field-card-val'+(html?'':' empty')+'">'+(html||'—')+'</div></div>';
 }
 // ── PERSON PROFILE SECTION EDITING ─────────────────────────────────────
 function pvBuildPersonPatch(p, overrides) {

@@ -332,7 +332,7 @@ export async function handleChmsApi(req, env, url, method, seg, role = 'admin') 
 
   // ── Utilities (address validation, phone normalization) → api-utils.js ─────
   if (seg.startsWith('utils/')) {
-    const result = await handleUtilsApi(req, env, url, method, seg, db, isAdmin);
+    const result = await handleUtilsApi(req, env, url, method, seg, db, isAdmin, canEdit);
     if (result) return result;
   }
 

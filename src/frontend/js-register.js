@@ -233,22 +233,22 @@ function printRegister() {
       if (hasExtended) {
         tableRows += '<tr>'
           +'<td style="color:#999;">'+(i+1)+'</td>'
-          +'<td>'+(e.event_date||'\u2014')+'</td>'
-          +'<td><strong>'+(e.name||'\u2014')+'</strong>'+(e.record_type?'<br><small>'+e.record_type+'</small>':'')+'</td>'
-          +'<td>'+(e.dob||'\u2014')+(e.place_of_birth?'<br><small>'+e.place_of_birth+'</small>':'')+'</td>'
-          +'<td>'+(e.father||'\u2014')+'</td>'
-          +'<td>'+(e.mother||'\u2014')+'</td>'
-          +'<td>'+(e.sponsors||e.name2||'\u2014')+(e.notes?'<br><em>'+e.notes+'</em>':'')+'</td>'
-          +'<td>'+(e.officiant||'\u2014')+'</td>'
-          +'<td>'+(e.baptism_place||'\u2014')+(e.pdf_page?'<br><small>p.'+e.pdf_page+'</small>':'')+'</td>'
+          +'<td>'+(e.event_date ? esc(e.event_date) : '\u2014')+'</td>'
+          +'<td><strong>'+(e.name ? esc(e.name) : '\u2014')+'</strong>'+(e.record_type?'<br><small>'+esc(e.record_type)+'</small>':'')+'</td>'
+          +'<td>'+(e.dob ? esc(e.dob) : '\u2014')+(e.place_of_birth?'<br><small>'+esc(e.place_of_birth)+'</small>':'')+'</td>'
+          +'<td>'+(e.father ? esc(e.father) : '\u2014')+'</td>'
+          +'<td>'+(e.mother ? esc(e.mother) : '\u2014')+'</td>'
+          +'<td>'+(e.sponsors||e.name2 ? esc(e.sponsors||e.name2) : '\u2014')+(e.notes?'<br><em>'+esc(e.notes)+'</em>':'')+'</td>'
+          +'<td>'+(e.officiant ? esc(e.officiant) : '\u2014')+'</td>'
+          +'<td>'+(e.baptism_place ? esc(e.baptism_place) : '\u2014')+(e.pdf_page?'<br><small>p.'+esc(String(e.pdf_page))+'</small>':'')+'</td>'
           +'</tr>';
       } else {
         tableRows += '<tr>'
           +'<td style="color:#999;">'+(i+1)+'</td>'
-          +'<td>'+(e.event_date||'\u2014')+'</td>'
-          +'<td><strong>'+(e.name||'\u2014')+'</strong></td>'
-          +'<td>'+(e.name2||'\u2014')+'</td>'
-          +'<td>'+(e.officiant||'\u2014')+(e.notes?'<br><em style="font-size:.8em;color:#666">'+e.notes+'</em>':'')+'</td>'
+          +'<td>'+(e.event_date ? esc(e.event_date) : '\u2014')+'</td>'
+          +'<td><strong>'+(e.name ? esc(e.name) : '\u2014')+'</strong></td>'
+          +'<td>'+(e.name2 ? esc(e.name2) : '\u2014')+'</td>'
+          +'<td>'+(e.officiant ? esc(e.officiant) : '\u2014')+(e.notes?'<br><em style="font-size:.8em;color:#666">'+esc(e.notes)+'</em>':'')+'</td>'
           +'</tr>';
       }
     });
@@ -263,7 +263,7 @@ function printRegister() {
     +'small{font-size:7.5pt;color:#777;}em{color:#555;}'
     +'@media print{body{padding:0;}.no-print{display:none;}@page{size:landscape;}}</style></head><body>'
     +'<div class="no-print" style="margin-bottom:16px;"><button onclick="window.print()">&#128424; Print</button></div>'
-    +'<h1>'+(churchName ? churchName+' \u2014 ' : '')+lbl.title+' Register</h1>'
+    +'<h1>'+(churchName ? esc(churchName)+' \u2014 ' : '')+lbl.title+' Register</h1>'
     +'<h2>'+(year||'All Years')+' \u00b7 '+entries.length+' '+(entries.length===1?'entry':'entries')+'</h2>'
     +'<table><thead>'+thead+'</thead><tbody>'+tableRows+'</tbody></table>'
     +'</body></html>');

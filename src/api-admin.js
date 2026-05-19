@@ -473,7 +473,8 @@ export async function handleAdminApi(req, env, url, method) {
       seg === 'directory') {
     try {
       const role = await getAuthRole(req, env);
-      return await handleChmsApi(req, env, url, method, seg, role || 'admin');
+      if (!role) return json({ error: 'Unauthorized' }, 401);
+      return await handleChmsApi(req, env, url, method, seg, role);
     } catch (e) {
       console.error('ChMS API error [' + method + ' ' + seg + ']:', e?.message, e?.stack);
       return json({ error: 'Internal server error. Please try again.' }, 500);
