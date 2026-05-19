@@ -8,13 +8,15 @@ function setBatchFilter(btn, val) {
   loadBatches();
 }
 var _pendingOpenBatchId = null;
+var _lastBatches = null;
 function goToBatch(batchId) {
   _pendingOpenBatchId = batchId;
   showTab('giving');
 }
 function loadBatches() {
   api('/admin/api/giving/batches?status=' + _batchFilter).then(function(d) {
-    renderBatchList(d.batches || []);
+    _lastBatches = d.batches || [];
+    renderBatchList(_lastBatches);
     if (_pendingOpenBatchId) {
       var bid = _pendingOpenBatchId;
       _pendingOpenBatchId = null;
@@ -24,7 +26,11 @@ function loadBatches() {
 }
 function filterBatchSearch(val) {
   _batchSearch = (val||'').toLowerCase().trim();
-  loadBatches();
+  if (_lastBatches) {
+    renderBatchList(_lastBatches);
+  } else {
+    loadBatches();
+  }
 }
 function renderBatchList(batches) {
   var c = document.getElementById('batch-list');

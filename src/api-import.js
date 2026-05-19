@@ -223,33 +223,48 @@ if (seg === 'import/breeze-attendance-sync' && method === 'POST') {
   if (services.length === 0) return json({ ok: true, synced: 0, failed: 0, message: 'No services with Breeze instance IDs found. Re-import the TSV first.' });
   let synced = 0, failed = 0;
   const errors = [];
-  for (const svc of services) {
-    try {
-      const res = await breeze.attendance(svc.breeze_instance_id);
+  const BATCH_SIZE = 25;
+  const updates = [];
+
+  for (let i = 0; i < services.length; i += BATCH_SIZE) {
+    const batch = services.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map(svc => breeze.attendance(svc.breeze_instance_id)));
+    for (let j = 0; j < batch.length; j++) {
+      const svc = batch[j];
+      const outcome = results[j];
+      if (outcome.status === 'rejected') {
+        errors.push({ instance_id: svc.breeze_instance_id, date: svc.service_date, time: svc.service_time, error: String(outcome.reason).slice(0,120) });
+        failed++; continue;
+      }
+      const res = outcome.value;
       if (!res.ok) {
-        const errText = await res.text().catch(() => res.status);
+        const errText = await res.text().catch(() => String(res.status));
         errors.push({ instance_id: svc.breeze_instance_id, date: svc.service_date, time: svc.service_time, error: `HTTP ${res.status}: ${errText}`.slice(0,120) });
         failed++; continue;
       }
-      const data = await res.json();
-      // Anonymous response is an array of check-in records; count = length
-      // or may return [{count: N}] - handle both
-      let count = 0;
-      if (Array.isArray(data)) {
-        if (data.length > 0 && typeof data[0] === 'object' && 'count' in data[0]) {
-          count = parseInt(data[0].count) || 0;
-        } else {
-          count = data.length;
+      try {
+        const data = await res.json();
+        let count = 0;
+        if (Array.isArray(data)) {
+          if (data.length > 0 && typeof data[0] === 'object' && 'count' in data[0]) {
+            count = parseInt(data[0].count) || 0;
+          } else {
+            count = data.length;
+          }
         }
+        if (count > 0) {
+          updates.push(db.prepare('UPDATE worship_services SET attendance=? WHERE id=?').bind(count, svc.id));
+          synced++;
+        }
+      } catch(e) {
+        errors.push({ instance_id: svc.breeze_instance_id, date: svc.service_date, time: svc.service_time, error: String(e).slice(0,120) });
+        failed++;
       }
-      if (count > 0) {
-        await db.prepare('UPDATE worship_services SET attendance=? WHERE id=?').bind(count, svc.id).run();
-        synced++;
-      }
-    } catch(e) {
-      errors.push({ instance_id: svc.breeze_instance_id, date: svc.service_date, time: svc.service_time, error: String(e).slice(0,120) });
-      failed++;
     }
+  }
+  // Flush all attendance updates in batches
+  for (let i = 0; i < updates.length; i += 100) {
+    await db.batch(updates.slice(i, i + 100));
   }
   return json({ ok: true, synced, failed, errors: errors.slice(0, 20), total: services.length });
 }
@@ -1827,6 +1842,70 @@ if (seg === 'import/breeze-giving-csv' && method === 'POST') { try {
     return m ? `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}` : d;
   };
 
+  // Pass 1: scan for new batches and funds needed, collect before main insert loop
+  const newBatchKeys = new Map(); // batchKey → first-seen date
+  const fundLinks = new Map();    // breezeFundId → localId (link by name)
+  const fundNameFixes = new Map();// localId → realName (placeholder rename)
+  const newFunds = new Map();     // breezeFundId → {name, nameKey}
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = delim === '\t' ? lines[i].split('\t') : lines[i].split(',');
+    const paymentId = (cols[iPaymentId] || '').replace(/['"]/g, '').trim();
+    if (!paymentId || existingIds.has(paymentId)) continue;
+    const date = normDate((cols[iDate] || '').replace(/['"]/g, '').trim());
+    const batchNum = (cols[iBatch] || '').replace(/['"]/g, '').trim();
+    const batchKey = batchNum ? `Breeze Batch #${batchNum}` : `Breeze Import ${date}`;
+    if (!batchByDesc[batchKey] && !newBatchKeys.has(batchKey)) newBatchKeys.set(batchKey, date);
+    const amountStr = (cols[iAmount] || '').replace(/[$\s'"]/g, '');
+    const fundsStr = (cols[iFunds] || '').replace(/^["']|["']$/g, '').trim();
+    for (const fl of parseFunds(fundsStr, String(parseFloat(amountStr) || 0))) {
+      if (!fundByBreezeId[fl.breezeFundId] && !fundLinks.has(fl.breezeFundId) && !newFunds.has(fl.breezeFundId)) {
+        const fname = fl.fundName || `Breeze Fund ${fl.breezeFundId}`;
+        const nameKey = fname.toLowerCase().trim();
+        if (fundByName[nameKey]) {
+          fundLinks.set(fl.breezeFundId, { localId: fundByName[nameKey] });
+        } else {
+          newFunds.set(fl.breezeFundId, { name: fname, nameKey });
+        }
+      } else if (fl.fundName && fundByBreezeId[fl.breezeFundId]) {
+        const existId = fundByBreezeId[fl.breezeFundId];
+        if (!fundNameFixes.has(existId)) fundNameFixes.set(existId, fl.fundName);
+      }
+    }
+  }
+
+  // Apply pre-scanned batch/fund changes before the main insert pass
+  if (newBatchKeys.size) {
+    const stmts = [...newBatchKeys.entries()].map(([k, d]) =>
+      db.prepare('INSERT INTO giving_batches (batch_date, description, closed) VALUES (?,?,1)').bind(d, k)
+    );
+    const results = await db.batch(stmts);
+    [...newBatchKeys.keys()].forEach((k, i) => { batchByDesc[k] = results[i].meta?.last_row_id; });
+  }
+  if (fundLinks.size) {
+    await db.batch([...fundLinks.entries()].map(([bid, {localId}]) =>
+      db.prepare('UPDATE funds SET breeze_id=? WHERE id=? AND (breeze_id IS NULL OR breeze_id="")').bind(bid, localId)
+    ));
+    for (const [bid, {localId}] of fundLinks) { fundByBreezeId[bid] = localId; }
+  }
+  if (newFunds.size) {
+    const stmts = [...newFunds.entries()].map(([bid, {name}]) =>
+      db.prepare('INSERT INTO funds (name, breeze_id, active, sort_order) VALUES (?,?,1,99)').bind(name, bid)
+    );
+    const results = await db.batch(stmts);
+    [...newFunds.entries()].forEach(([bid, {nameKey}], i) => {
+      const id = results[i].meta?.last_row_id;
+      fundByBreezeId[bid] = id;
+      fundByName[nameKey] = id;
+    });
+  }
+  if (fundNameFixes.size) {
+    await db.batch([...fundNameFixes.entries()].map(([id, name]) =>
+      db.prepare("UPDATE funds SET name=? WHERE id=? AND name LIKE 'Breeze Fund %'").bind(name, id)
+    ));
+  }
+
+  // Main pass: build entry inserts (no batch/fund DB calls needed)
   for (let i = 1; i < lines.length; i++) {
     try {
       const cols = delim === '\t' ? lines[i].split('\t') : lines[i].split(',');
@@ -1847,35 +1926,10 @@ if (seg === 'import/breeze-giving-csv' && method === 'POST') { try {
       const method = parseMethod(methodRaw);
       const personId = personBreezeId ? (personByBreezeId[personBreezeId] ?? null) : null;
       const batchKey = batchNum ? `Breeze Batch #${batchNum}` : `Breeze Import ${date}`;
-
-      if (!batchByDesc[batchKey]) {
-        const r = await db.prepare('INSERT INTO giving_batches (batch_date, description, closed) VALUES (?,?,1)')
-          .bind(date, batchKey).run();
-        batchByDesc[batchKey] = r.meta?.last_row_id;
-      }
       const batchId = batchByDesc[batchKey];
 
       for (const fl of parseFunds(fundsStr, String(totalAmount))) {
         const cents = Math.round(parseFloat(fl.amount || '0') * 100);
-        if (!fundByBreezeId[fl.breezeFundId]) {
-          const fname = fl.fundName || `Breeze Fund ${fl.breezeFundId}`;
-          const nameKey = fname.toLowerCase().trim();
-          if (fundByName[nameKey]) {
-            // Fund exists by name (may have no breeze_id yet) — link it
-            fundByBreezeId[fl.breezeFundId] = fundByName[nameKey];
-            await db.prepare('UPDATE funds SET breeze_id=? WHERE id=? AND (breeze_id IS NULL OR breeze_id="")').bind(fl.breezeFundId, fundByName[nameKey]).run();
-          } else {
-            const r = await db.prepare('INSERT INTO funds (name, breeze_id, active, sort_order) VALUES (?,?,1,99)')
-              .bind(fname, fl.breezeFundId).run();
-            fundByBreezeId[fl.breezeFundId] = r.meta?.last_row_id;
-            fundByName[nameKey] = fundByBreezeId[fl.breezeFundId];
-          }
-        } else if (fl.fundName) {
-          // Fund already exists — if it has a placeholder name, fix it using the real CSV name
-          const existId = fundByBreezeId[fl.breezeFundId];
-          await db.prepare("UPDATE funds SET name=? WHERE id=? AND name LIKE 'Breeze Fund %'")
-            .bind(fl.fundName, existId).run();
-        }
         entryInserts.push(
           db.prepare(
             `INSERT INTO giving_entries (batch_id,person_id,fund_id,amount,method,check_number,notes,breeze_id,contribution_date)
@@ -2106,28 +2160,59 @@ if (seg === 'import/breeze-sync-tags' && method === 'POST') { try {
     if (!tagRes.ok) return json({ error: `Breeze API error: ${tagRes.status}` }, 502);
     let rawTags; try { rawTags = await tagRes.json(); } catch { return json({ error: 'Invalid JSON from Breeze' }, 502); }
     const allBreezeTags = Array.isArray(rawTags) ? rawTags : [];
+
+    // Pre-load all local tags into Maps to avoid per-tag DB round-trips
+    const localTagsByBreezeId = new Map();
+    const localTagsByName = new Map();
+    for (const t of (await db.prepare('SELECT id, name, breeze_id FROM tags').all()).results || []) {
+      if (t.breeze_id) localTagsByBreezeId.set(String(t.breeze_id), t.id);
+      if (!t.breeze_id || t.breeze_id === '') localTagsByName.set((t.name || '').trim().toLowerCase(), t.id);
+    }
+
     const tags = [];
+    const nameUpdates = [];  // UPDATE tags SET name=? WHERE breeze_id=?  (already-linked tags)
+    const linkUpdates = [];  // UPDATE tags SET breeze_id=? WHERE id=?     (link by name)
+    const newInserts = [];   // INSERT INTO tags (name, breeze_id)
+    const insertMeta = [];   // {bId, tName} parallel to newInserts for result mapping
+
     for (const t of allBreezeTags) {
       const bId = String(t.id);
       const tName = (t.name || '').trim();
       if (!tName) continue;
-      let localId;
-      const existing = await db.prepare('SELECT id FROM tags WHERE breeze_id=?').bind(bId).first();
-      if (existing) {
-        await db.prepare('UPDATE tags SET name=? WHERE breeze_id=?').bind(tName, bId).run();
-        localId = existing.id;
+
+      if (localTagsByBreezeId.has(bId)) {
+        const localId = localTagsByBreezeId.get(bId);
+        nameUpdates.push(db.prepare('UPDATE tags SET name=? WHERE breeze_id=?').bind(tName, bId));
+        tags.push({ breeze_id: bId, local_id: localId, name: tName });
       } else {
-        const byName = await db.prepare('SELECT id FROM tags WHERE name=? AND (breeze_id="" OR breeze_id IS NULL)').bind(tName).first();
-        if (byName) {
-          await db.prepare('UPDATE tags SET breeze_id=? WHERE id=?').bind(bId, byName.id).run();
-          localId = byName.id;
+        const nameKey = tName.toLowerCase();
+        const byNameId = localTagsByName.get(nameKey);
+        if (byNameId) {
+          linkUpdates.push(db.prepare('UPDATE tags SET breeze_id=? WHERE id=?').bind(bId, byNameId));
+          localTagsByBreezeId.set(bId, byNameId);
+          tags.push({ breeze_id: bId, local_id: byNameId, name: tName });
         } else {
-          const r = await db.prepare('INSERT INTO tags (name, breeze_id) VALUES (?,?)').bind(tName, bId).run();
-          localId = r.meta?.last_row_id;
+          newInserts.push(db.prepare('INSERT INTO tags (name, breeze_id) VALUES (?,?)').bind(tName, bId));
+          insertMeta.push({ bId, tName });
         }
       }
-      if (localId) tags.push({ breeze_id: bId, local_id: localId, name: tName });
     }
+
+    // Flush all DB changes
+    const allStmts = [...nameUpdates, ...linkUpdates];
+    for (let i = 0; i < allStmts.length; i += 100) await db.batch(allStmts.slice(i, i + 100));
+
+    if (newInserts.length) {
+      for (let i = 0; i < newInserts.length; i += 100) {
+        const results = await db.batch(newInserts.slice(i, i + 100));
+        for (let j = 0; j < results.length; j++) {
+          const { bId, tName } = insertMeta[i + j];
+          const localId = results[j].meta?.last_row_id;
+          if (localId) tags.push({ breeze_id: bId, local_id: localId, name: tName });
+        }
+      }
+    }
+
     return json({ ok: true, tags });
   }
 

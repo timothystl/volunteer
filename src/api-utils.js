@@ -413,8 +413,13 @@ export async function handleUtilsApi(req, env, url, method, seg, db, isAdmin, ca
     const toUpdate = rows
       .map(r => ({ id: r.id, norm: normalizePhone(r.phone), orig: r.phone }))
       .filter(r => r.norm !== r.orig);
-    for (const row of toUpdate) {
-      await db.prepare('UPDATE people SET phone=? WHERE id=?').bind(row.norm, row.id).run();
+    if (toUpdate.length) {
+      const CHUNK = 99;
+      for (let i = 0; i < toUpdate.length; i += CHUNK) {
+        await db.batch(toUpdate.slice(i, i + CHUNK).map(row =>
+          db.prepare('UPDATE people SET phone=? WHERE id=?').bind(row.norm, row.id)
+        ));
+      }
     }
     return json({ ok: true, updated: toUpdate.length, total_with_phone: rows.length });
   }
