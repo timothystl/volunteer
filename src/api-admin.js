@@ -290,18 +290,37 @@ export async function handleAdminApi(req, env, url, method) {
     if (ministry && ministry !== 'all') { q += ' WHERE s.ministry=?'; binds.push(ministry); }
     q += ' ORDER BY s.created_at DESC';
     const rows = await env.DB.prepare(q).bind(...binds).all();
-    // Attach slot details; map to plain objects to ensure JSON serializability
-    const signups = [];
-    for (const s of (rows.results || [])) {
-      const slotRows = await env.DB.prepare(
-        `SELECT r.name, r.role_date, r.start_time, r.end_time FROM signup_slots ss JOIN serve_roles r ON ss.role_id=r.id WHERE ss.signup_id=?`
-      ).bind(s.id).all();
-      let linkedPersonName = '';
-      if (s.person_id) {
-        const p = await env.DB.prepare('SELECT first_name, last_name FROM people WHERE id=?').bind(s.person_id).first();
-        if (p) linkedPersonName = ((p.first_name || '') + ' ' + (p.last_name || '')).trim();
+    // Bulk-load slot details and linked person names to avoid N+1 queries
+    const signupList = rows.results || [];
+    const signupIds = signupList.map(s => s.id).filter(Boolean);
+    const personIds = [...new Set(signupList.map(s => s.person_id).filter(Boolean))];
+
+    const slotsBySignup = {};
+    if (signupIds.length) {
+      const ph = signupIds.map(() => '?').join(',');
+      const allSlots = (await env.DB.prepare(
+        `SELECT ss.signup_id, r.name, r.role_date, r.start_time, r.end_time
+         FROM signup_slots ss JOIN serve_roles r ON ss.role_id=r.id
+         WHERE ss.signup_id IN (${ph})`
+      ).bind(...signupIds).all()).results || [];
+      for (const sl of allSlots) {
+        if (!slotsBySignup[sl.signup_id]) slotsBySignup[sl.signup_id] = [];
+        slotsBySignup[sl.signup_id].push({ name: sl.name || '', role_date: sl.role_date || '', start_time: sl.start_time || '', end_time: sl.end_time || '' });
       }
-      signups.push({
+    }
+    const personNames = {};
+    if (personIds.length) {
+      const ph = personIds.map(() => '?').join(',');
+      const allPeople = (await env.DB.prepare(
+        `SELECT id, first_name, last_name FROM people WHERE id IN (${ph})`
+      ).bind(...personIds).all()).results || [];
+      for (const p of allPeople) {
+        personNames[p.id] = ((p.first_name || '') + ' ' + (p.last_name || '')).trim();
+      }
+    }
+
+    const signups = signupList.map(function(s) {
+      return {
         id: s.id, event_id: s.event_id, role_id: s.role_id,
         ministry: s.ministry || '', name: s.name || '', email: s.email || '',
         phone: s.phone || '', roles: s.roles || '[]', service: s.service || '',
@@ -309,12 +328,11 @@ export async function handleAdminApi(req, env, url, method) {
         shirt_size: s.shirt_size || '', notes: s.notes || '',
         created_at: s.created_at || '', event_name: s.event_name || null,
         person_id: s.person_id || null, contact_count: s.contact_count || 0,
-        contacted_at: s.contacted_at || '', linked_person_name: linkedPersonName,
-        slot_details: (slotRows.results || []).map(function(sl) {
-          return { name: sl.name || '', role_date: sl.role_date || '', start_time: sl.start_time || '', end_time: sl.end_time || '' };
-        }),
-      });
-    }
+        contacted_at: s.contacted_at || '',
+        linked_person_name: s.person_id ? (personNames[s.person_id] || '') : '',
+        slot_details: slotsBySignup[s.id] || [],
+      };
+    });
     return json({ signups });
   }
 
@@ -327,18 +345,36 @@ export async function handleAdminApi(req, env, url, method) {
 
   if (seg === 'events' && method === 'GET') {
     const events = await env.DB.prepare('SELECT * FROM serve_events ORDER BY sort_order,event_date,id').all();
-    const result = [];
-    for (const ev of (events.results || [])) {
-      const roles = await env.DB.prepare(
-        'SELECT * FROM serve_roles WHERE event_id=? ORDER BY role_date,sort_order,id'
-      ).bind(ev.id).all();
-      const rolesWithFill = [];
-      for (const role of (roles.results || [])) {
-        const filled = await env.DB.prepare('SELECT COUNT(*) as n FROM signup_slots WHERE role_id=?').bind(role.id).first();
-        rolesWithFill.push({ ...role, filled_count: filled?.n || 0 });
+    const eventList = events.results || [];
+    const eventIds = eventList.map(e => e.id).filter(Boolean);
+
+    const rolesByEvent = {};
+    const fillCounts = {};
+    if (eventIds.length) {
+      const ph = eventIds.map(() => '?').join(',');
+      const allRoles = (await env.DB.prepare(
+        `SELECT * FROM serve_roles WHERE event_id IN (${ph}) ORDER BY role_date,sort_order,id`
+      ).bind(...eventIds).all()).results || [];
+      for (const r of allRoles) {
+        if (!rolesByEvent[r.event_id]) rolesByEvent[r.event_id] = [];
+        rolesByEvent[r.event_id].push(r);
       }
-      result.push({ ...ev, roles: applyXmasMarketDefaults(ev.name, rolesWithFill) });
+      const roleIds = allRoles.map(r => r.id).filter(Boolean);
+      if (roleIds.length) {
+        const rph = roleIds.map(() => '?').join(',');
+        const counts = (await env.DB.prepare(
+          `SELECT role_id, COUNT(*) as n FROM signup_slots WHERE role_id IN (${rph}) GROUP BY role_id`
+        ).bind(...roleIds).all()).results || [];
+        for (const c of counts) fillCounts[c.role_id] = c.n;
+      }
     }
+
+    const result = eventList.map(function(ev) {
+      const roles = (rolesByEvent[ev.id] || []).map(function(r) {
+        return { ...r, filled_count: fillCounts[r.id] || 0 };
+      });
+      return { ...ev, roles: applyXmasMarketDefaults(ev.name, roles) };
+    });
     return json({ events: result });
   }
 

@@ -166,13 +166,19 @@ if (seg === 'people' && method === 'GET') {
   // Household size filter (matches People Insights buckets)
   const hhSize = url.searchParams.get('household_size') || '';
   const hhSizeClauses = {
-    single:       `(SELECT COUNT(*) FROM people ps WHERE ps.household_id=p.household_id AND ps.active=1) = 1`,
-    couple:       `(SELECT COUNT(*) FROM people ps WHERE ps.household_id=p.household_id AND ps.active=1) = 2`,
-    small:        `(SELECT COUNT(*) FROM people ps WHERE ps.household_id=p.household_id AND ps.active=1) BETWEEN 3 AND 4`,
-    large:        `(SELECT COUNT(*) FROM people ps WHERE ps.household_id=p.household_id AND ps.active=1) >= 5`,
+    single:       `hh_sz.n = 1`,
+    couple:       `hh_sz.n = 2`,
+    small:        `hh_sz.n BETWEEN 3 AND 4`,
+    large:        `hh_sz.n >= 5`,
     no_household: `(p.household_id IS NULL OR p.household_id=0)`,
   };
+  const needHhJoin = hhSize && hhSize !== 'no_household' && hhSizeClauses[hhSize];
   if (hhSizeClauses[hhSize]) where += ' AND ' + hhSizeClauses[hhSize];
+  // When filtering by household size, join a pre-aggregated subquery instead of
+  // using per-row correlated subqueries which scan the whole table for each candidate.
+  const hhJoin = needHhJoin
+    ? ' JOIN (SELECT household_id, COUNT(*) as n FROM people WHERE active=1 GROUP BY household_id) hh_sz ON hh_sz.household_id=p.household_id'
+    : '';
   // Baptism & Confirmation status filter
   const sacrament = url.searchParams.get('sacrament') || '';
   const sacramentClauses = {
@@ -183,12 +189,12 @@ if (seg === 'people' && method === 'GET') {
   };
   if (sacramentClauses[sacrament]) where += ' AND ' + sacramentClauses[sacrament];
   // Total count
-  const countRow = await db.prepare(`SELECT COUNT(*) as n FROM people p WHERE ${where}`).bind(...binds).first();
+  const countRow = await db.prepare(`SELECT COUNT(*) as n FROM people p${hhJoin} WHERE ${where}`).bind(...binds).first();
   const total = countRow?.n || 0;
   // Paged results
   const rows = (await db.prepare(
     `SELECT p.*, h.name as household_name FROM people p
-     LEFT JOIN households h ON p.household_id=h.id
+     LEFT JOIN households h ON p.household_id=h.id${hhJoin}
      WHERE ${where} ORDER BY ${sortCol} ${sortDir}, p.last_name ASC, p.first_name ASC LIMIT ? OFFSET ?`
   ).bind(...binds, limit, offset).all()).results || [];
   // Batch-load tags for all returned people in a single query (avoids N+1)
@@ -251,10 +257,10 @@ if (seg === 'people' && method === 'POST') {
          b.gender||'',b.marital_status||'', firstContactDate||'', b.sms_opt_in?1:0
   ).run();
   const personId = r.meta?.last_row_id;
-  if (Array.isArray(b.tag_ids)) {
-    for (const tid of b.tag_ids) {
-      try { await db.prepare('INSERT OR IGNORE INTO person_tags(person_id,tag_id) VALUES(?,?)').bind(personId,tid).run(); } catch {}
-    }
+  if (Array.isArray(b.tag_ids) && b.tag_ids.length) {
+    await db.batch(b.tag_ids.map(tid =>
+      db.prepare('INSERT OR IGNORE INTO person_tags(person_id,tag_id) VALUES(?,?)').bind(personId, tid)
+    )).catch(() => {});
   }
   // Auto-push to Breeze for manually-added people (not Breeze imports which already have breeze_id).
   if (!b.breeze_id) autoPushPersonToBreeze(env, db, personId, b).catch(() => {});
@@ -267,8 +273,12 @@ if (seg === 'people/bulk-member-type' && method === 'POST') {
   const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
   const mt = (b.member_type || '').toLowerCase();
   if (!ids.length || !mt) return json({ error: 'ids and member_type required' }, 400);
-  const placeholders = ids.map(() => '?').join(',');
-  await db.prepare(`UPDATE people SET member_type=? WHERE id IN (${placeholders})`).bind(mt, ...ids).run();
+  const CHUNK = 89;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    const placeholders = chunk.map(() => '?').join(',');
+    await db.prepare(`UPDATE people SET member_type=? WHERE id IN (${placeholders})`).bind(mt, ...chunk).run();
+  }
   return json({ ok: true, updated: ids.length });
 }
 
@@ -414,10 +424,11 @@ if (pmatch) {
            b.baptized?1:0, b.confirmed?1:0, b.sms_opt_in?1:0, pid
     ).run();
     if (Array.isArray(b.tag_ids)) {
-      await db.prepare('DELETE FROM person_tags WHERE person_id=?').bind(pid).run();
+      const tagStmts = [db.prepare('DELETE FROM person_tags WHERE person_id=?').bind(pid)];
       for (const tid of b.tag_ids) {
-        try { await db.prepare('INSERT OR IGNORE INTO person_tags(person_id,tag_id) VALUES(?,?)').bind(pid,tid).run(); } catch {}
+        tagStmts.push(db.prepare('INSERT OR IGNORE INTO person_tags(person_id,tag_id) VALUES(?,?)').bind(pid, tid));
       }
+      await db.batch(tagStmts).catch(() => {});
     }
     // Propagate anniversary_date to household spouse if they don't have one set
     if (b.anniversary_date && b.household_id && ['head','spouse'].includes(b.family_role||'')) {

@@ -123,15 +123,23 @@ export async function handleHouseholdsApi(req, env, url, method, seg, db, isAdmi
          SELECT 1 FROM people p2 WHERE p2.household_id=h.id AND p2.active=1 AND p2.family_role='head'
        )`
     ).all()).results || [];
+    // Fetch best candidate per headless household in one query (spouse preferred, else min id)
+    const hhIds = headless.map(h => h.id);
     let fixed = 0;
-    for (const hh of headless) {
-      const candidate = await db.prepare(
-        `SELECT id FROM people WHERE household_id=? AND active=1
-         ORDER BY CASE family_role WHEN 'spouse' THEN 0 ELSE 1 END, id LIMIT 1`
-      ).bind(hh.id).first();
-      if (candidate) {
-        await db.prepare(`UPDATE people SET family_role='head' WHERE id=?`).bind(candidate.id).run();
-        fixed++;
+    if (hhIds.length) {
+      const ph = hhIds.map(() => '?').join(',');
+      const candidates = (await db.prepare(
+        `SELECT household_id,
+                COALESCE(MIN(CASE WHEN family_role='spouse' THEN id END), MIN(id)) AS best_id
+         FROM people WHERE household_id IN (${ph}) AND active=1
+         GROUP BY household_id`
+      ).bind(...hhIds).all()).results || [];
+      const updateStmts = candidates
+        .filter(r => r.best_id)
+        .map(r => db.prepare(`UPDATE people SET family_role='head' WHERE id=?`).bind(r.best_id));
+      if (updateStmts.length) {
+        await db.batch(updateStmts);
+        fixed = updateStmts.length;
       }
     }
     return json({ ok: true, fixed, total_headless: headless.length });

@@ -257,19 +257,19 @@ Use this as the session-to-session roadmap. Complete one phase fully before star
 ### Phase 11 — Performance & N+1 Query Fixes
 **Goal:** Eliminate patterns that will timeout the Cloudflare Worker under real data volumes (>200 people, >50 tags, >100 services) and remove unnecessary repeat round-trips in the frontend.
 
-- [ ] **PF1** — `api-admin.js` lines ~286–343 — N+1 DB queries in signups and events handlers. For each signup: two sequential `db.prepare().all()` calls. For each event: one roles query + one count-per-role query. Fix: bulk-fetch all slots by `signup_id IN (...)`, all people by `person_id IN (...)`, all roles and fill-counts by event IDs — join in JS. (`api-admin.js`)
-- [ ] **PF2** — `api-import.js` line ~226 — `import/breeze-attendance-sync` makes one sequential Breeze API call per service row; hundreds of services exhaust the 30-second CPU budget. Fix: batch requests with `Promise.allSettled` in groups of 20–30, or cap and return a `done: false` cursor for the frontend to loop. (`api-import.js`)
-- [ ] **PF3** — `api-import.js` lines ~1830–1888 — CSV giving import: giving entry INSERTs are already batched (fixed). Remaining issue: new fund and batch CREATE/UPDATE calls still fire individually inside the per-row loop on first encounter of each new fund/batch. In practice rare (most funds/batches already exist), but fix by pre-scanning pass 1 for unique new batches/funds and bulk-creating before the main insert pass. (`api-import.js`)
-- [ ] **PF4** — `api-import.js` lines ~2093–2184 — tag-sync `phase=list` makes 2–3 sequential DB queries per Breeze tag in a loop. `phase=sync` is already fixed (pre-loads all tags into a `Map`, uses `db.batch()` for inserts). Fix `phase=list` to match: pre-load all local tags by `breeze_id` and `name` into Maps before the loop, do lookups in JS, and batch any UPDATE/INSERT statements. (`api-import.js`)
-- [ ] **PF5** — `api-people.js` line ~270 — `bulk-member-type` has no D1 param chunking; crashes when `ids.length >= 90` (the +1 `mt` param puts it over the ~100 limit). `bulk-sacrament` at lines ~286–300 correctly chunks at 89. Apply the same `CHUNK = 89` loop. (`api-people.js`)
-- [ ] **PF6** — `api-households.js` lines ~124–131 — `fix-heads`: SELECT + UPDATE per headless household, serially. With hundreds of headless households this serially issues 2N D1 calls. Fix: use a CTE or `db.batch()`. (`api-households.js`)
-- [ ] **PF7** — `api-utils.js` lines ~415–418 — `normalize-phones`: one `UPDATE` per changed row. Fix: collect all updates and fire as a single `db.batch()`. (`api-utils.js`)
-- [ ] **PF8** — `api-reports.js` lines ~619–635 — 5-year trend runs 5 sequential awaited DB queries. Fix: `Promise.all(trendYears.map(...))`. (`api-reports.js`)
-- [ ] **PF9** — `api-reports.js` line ~1149 — giving-by-method uses a correlated subquery for `batch_date` per row instead of an explicit `JOIN giving_batches`. Fix: replace the correlated subquery with `JOIN giving_batches gb ON ge.batch_id=gb.id`. (`api-reports.js`)
-- [ ] **PF10** — `api-people.js` lines ~169–174 — `household_size` filter generates a correlated `SELECT COUNT(*)` subquery per candidate row. Fix: pre-aggregate with a CTE `WITH hh_counts AS (SELECT household_id, COUNT(*) n FROM people WHERE active=1 GROUP BY household_id)` and JOIN. (`api-people.js`)
-- [ ] **PF11** — `js-giving.js` line ~25 — `filterBatchSearch` fetches from the API on every keystroke. The filtering is client-side (`renderBatchList`). Fix: cache the last fetch result; call `renderBatchList(_lastBatches)` directly from `filterBatchSearch` with no API call. Add debounce if a server-side search is ever added. (`src/frontend/js-giving.js`)
+- [x] **PF1** — `api-admin.js` lines ~286–343 — bulk-fetch all slots, people, roles, fill-counts in 3 queries total instead of 2N+2M serial calls. Done 2026-05-19 (v219).
+- [x] **PF2** — `api-import.js` line ~226 — attendance sync batches Breeze API calls with `Promise.allSettled` in groups of 25; DB updates collected then flushed via `db.batch()`. Done 2026-05-19 (v219).
+- [x] **PF3** — `api-import.js` lines ~1830–1888 — pre-scan pass 1 collects all new batches/funds, bulk-creates them before the main insert loop. Done 2026-05-19 (v219).
+- [x] **PF4** — `api-import.js` lines ~2093–2184 — tag-sync `phase=list` pre-loads all local tags into Maps, batches all UPDATE/INSERT statements. Done 2026-05-19 (v219).
+- [x] **PF5** — `api-people.js` line ~270 — `bulk-member-type` chunks IDs at 89 to stay under D1 param limit. Done 2026-05-19 (v219).
+- [x] **PF6** — `api-households.js` lines ~124–131 — `fix-heads` fetches best candidate per household in one aggregated query, batches all UPDATEs. Done 2026-05-19 (v219).
+- [x] **PF7** — `api-utils.js` lines ~415–418 — `normalize-phones` collects all changes then fires as a single `db.batch()`. Done 2026-05-19 (v219).
+- [x] **PF8** — `api-reports.js` lines ~619–635 — 5-year trend runs all 5 queries in parallel with `Promise.all`. Done 2026-05-19 (v219).
+- [x] **PF9** — `api-reports.js` line ~1149 — giving-by-method replaces correlated subquery with explicit `JOIN giving_batches`. Done 2026-05-19 (v219).
+- [x] **PF10** — `api-people.js` lines ~169–174 — household_size filter uses pre-aggregated JOIN subquery instead of per-row correlated subqueries. Done 2026-05-19 (v219).
+- [x] **PF11** — `js-giving.js` line ~25 — `filterBatchSearch` caches last batch list and filters client-side without API call. Done 2026-05-19 (v219).
 - [x] **PF12** — Closed — current pattern (calling both `openBatch` and `loadBatches` after entry add/delete) is correct. Both refreshes are needed: `openBatch` updates the entry table, `loadBatches` updates the batch sidebar total. No change needed. (2026-05-19)
-- [ ] **PF13** — `api-people.js` lines ~255–257 and ~417–419 — tag inserts on create/update run one `INSERT OR IGNORE` per tag serially. Fix: replace with `db.batch()`. (`api-people.js`)
+- [x] **PF13** — `api-people.js` lines ~255–257 and ~417–419 — tag inserts on create/update use `db.batch()`. Done 2026-05-19 (v219).
 
 **Done when:** All items fixed; verify that a full Breeze attendance sync, a tag sync, and a 500-person giving-by-method report all complete within the 30-second Worker limit.
 

@@ -633,8 +633,7 @@ if (seg === 'reports/giving-insights' && method === 'GET') {
   // Average-gift trend — last 5 years ending in `year`
   const trendYears = [];
   for (let y = year - 4; y <= year; y++) trendYears.push(y);
-  const trendRows = [];
-  for (const y of trendYears) {
+  const trendRows = await Promise.all(trendYears.map(async y => {
     const s = y + '-01-01', e = y + '-12-31';
     const r = await db.prepare(
       `SELECT COUNT(*) AS gifts, COUNT(DISTINCT ge.person_id) AS givers, SUM(ge.amount) AS total_cents
@@ -645,14 +644,14 @@ if (seg === 'reports/giving-insights' && method === 'GET') {
     const gifts  = r?.gifts  || 0;
     const givers = r?.givers || 0;
     const tot    = r?.total_cents || 0;
-    trendRows.push({
+    return {
       year: y,
       gifts, givers,
       total_cents: tot,
       avg_gift_cents:  gifts  > 0 ? Math.round(tot / gifts)  : 0,
       avg_giver_cents: givers > 0 ? Math.round(tot / givers) : 0,
-    });
-  }
+    };
+  }));
 
   return json({
     year,
@@ -1165,7 +1164,8 @@ if (seg === 'reports/giving-by-method' && method === 'GET') {
   const rows = (await db.prepare(
     `SELECT ge.method, COUNT(ge.id) as contributions, COALESCE(SUM(ge.amount),0) as total_cents
      FROM giving_entries ge
-     WHERE COALESCE(NULLIF(ge.contribution_date,''), (SELECT batch_date FROM giving_batches WHERE id=ge.batch_id)) BETWEEN ? AND ?
+     JOIN giving_batches gb ON gb.id = ge.batch_id
+     WHERE COALESCE(NULLIF(ge.contribution_date,''), gb.batch_date) BETWEEN ? AND ?
      GROUP BY ge.method ORDER BY total_cents DESC`
   ).bind(from,to).all()).results || [];
   const grand = rows.reduce((s,r) => s + r.total_cents, 0);
