@@ -204,6 +204,125 @@ Use this as the session-to-session roadmap. Complete one phase fully before star
 
 ---
 
+### Phase 8 — Critical Security Fixes (deploy immediately)
+**Goal:** Eliminate SQL injection, broken auth fallback, and missing role guards. Zero behavior change for legitimate users. Ship as a single hotfix PR.
+
+- [ ] **SEC1** — SQL injection: `api-households.js` line ~19 — `hhMemberType` query param interpolated directly into SQL. Fix: validate against allowlist `['member','visitor','regular_attender','friend']` and use `.bind()`. (`api-households.js`)
+- [x] **SEC2** — SQL injection: `api-people.js` line ~766 — `entry.field` interpolated into column position. Closed — strict allowlist check immediately before the interpolation (`allowedFields.includes(entry.field)`) makes injection impossible in practice. Style could be improved to a `switch`, but no exploitable path exists. (2026-05-19)
+- [ ] **SEC3** — SQL injection: `api-reports.js` line ~433 — prayer CSV export builds `WHERE pr.status = '${statusParam}'` by string concatenation. Replace with a parameterized bind. (`api-reports.js`)
+- [ ] **SEC4** — Auth fallback: `api-chms.js` line ~476 — `role || 'admin'` grants full admin to any unauthenticated request that passes the outer router. Fix: `if (!role) return json({ error: 'Unauthorized' }, 401)`. (`api-chms.js`)
+- [ ] **SEC5** — Missing role guard: `api-giving.js` — all write handlers accept `isFinance`/`isAdmin` flags but never check them. Add `if (!isFinance) return json({ error: 'Access denied' }, 403)` at the top of each write handler (create batch, add entry, edit entry, delete entry, quick-entry). (`api-giving.js`)
+- [ ] **SEC6** — Missing role guard: `api-people.js` line ~264 — `POST /people/bulk-member-type` has no `isStaff` check. Finance-role users can silently bulk-change membership types. Fix: add `if (!isStaff) return json({ error: 'Access denied' }, 403)`. (`api-people.js`)
+- [ ] **SEC7** — Missing role guard: `api-people.js` line ~756 — `POST /audit/undo` has no role check; any staff user can undo any field change on any person. Fix: require `isAdmin`. (`api-people.js`)
+- [ ] **SEC8** — Missing role guard: `api-utils.js` line ~268 — `POST /utils/validate-address` is reachable by any authenticated user including `member` role, enabling quota exhaustion on the USPS/Lob API. Fix: add `if (!canEdit) return json({ error: 'Access denied' }, 403)`. (`api-utils.js`)
+
+**Done when:** All eight items fixed, `npm test` passes, manual smoke test of auth + giving + audit-undo confirms correct 403 behavior.
+
+---
+
+### Phase 9 — XSS Fixes
+**Goal:** Eliminate all cross-site scripting vectors. None of these change any feature behavior.
+
+- [ ] **XSS1** — `esc()` does not encode single quotes → stored XSS in onclick attributes across `js-people.js`, `js-dashboard.js`, `js-households.js`. Every pattern like `onclick="fn('+p.id+',\''+esc(p.email)+'\', ...)"` is exploitable by any person whose name/email contains a single quote followed by JS. Fix: either add `'` → `&#39;` to `esc()` in `js-core.js` (simplest — fixes all call sites at once) **or** refactor all onclick string args to use `data-*` attributes and read them in the handler (preferred long-term). The `reviewArchive` pattern on `js-dashboard.js` line ~511 is the one correct example to follow.
+- [ ] **XSS2** — `pvField()` in `js-people.js` line ~584 — puts raw DB values (including values written by Breeze sync) directly into `innerHTML` without `esc()`. Fix: wrap `val` in `esc()` inside `pvField`; create a `pvFieldHtml()` variant for callers that intentionally pass pre-built HTML (links, badges).
+- [ ] **XSS3** — Organization website href in `js-households.js` line ~306 allows `javascript:` protocol injection. A stored `javascript:alert(1)` URL executes for any admin viewing that organization. Fix: `var safeUrl = /^https?:\/\//i.test(o.website) ? o.website : '';` before building the anchor.
+- [ ] **XSS4** — `printRegister()` in `js-register.js` lines ~233–253 builds a full HTML document in a new window with all record fields (name, father, mother, sponsors, notes, officiant, place, etc.) concatenated raw. `renderRegisterList()` correctly uses `esc()` — bring `printRegister()` to parity.
+
+**Done when:** All four items fixed; verify with a test person whose name contains `<script>` and `'` that no JS executes in any view.
+
+---
+
+### Phase 10 — High-Priority Bug Fixes
+**Goal:** Fix correctness bugs that cause wrong data, silent failures, or broken UI. No schema changes required.
+
+- [ ] **BF1** — `api-people.js` lines ~467–469 — hard-deleting a person leaves orphaned rows in `giving_entries`, `follow_up_items`, and `audit_log`. Add `DELETE FROM giving_entries WHERE person_id=?`, `DELETE FROM follow_up_items WHERE person_id=?`, and `DELETE FROM audit_log WHERE entity_id=? AND entity_type='person'` inside the hard-delete block. (`api-people.js`)
+- [ ] **BF2** — `api-emails.js` lines ~347–366 — anniversary email dedup audit log is not written if the first email succeeds but the second fails (partial send). On the next cron run the first email is sent again. Fix: write the audit log row as soon as at least one email succeeded, regardless of partial failure. (`api-emails.js`)
+- [ ] **BF3** — `api-emails.js` line ~342 — shared-email anniversary couple with null `household_id`: `entity_id` stores `null` but `dedupeKey` falls to `p1.id`, so they never match — email sent every day. Fix: use `p1.household_id || p1.id` in the `.bind()` call. (`api-emails.js`)
+- [ ] **BF4** — `api-emails.js` line ~259 — birthday emails not filtered for deceased members. The anniversary query correctly excludes deceased via `AND (deceased=0 OR deceased IS NULL)`; add the same to the birthday query. (`api-emails.js`)
+- [ ] **BF5** — `js-register.js` lines ~331–446 — CSV/TSV register import partially broken: inside the `String.raw` template, `\\n`, `\\r`, `\\t` in string method calls (e.g. `split('\\t')`, `replace(/\\r\\n/g,'\\n')`) produce the two-character literal sequences `\t`, `\r\n` rather than the actual tab/newline characters — so tab detection and line splitting are broken. Date regex patterns like `/^\\d{4}-\\d{2}-\\d{2}$/` are correct because `String.raw` passes `\\d` → `\d` to the regex engine, which is valid. Fix: change `split('\\t')` to `split('\t')` and newline replacement patterns to use actual escape sequences. (`src/frontend/js-register.js`)
+- [x] **BF6** — Closed — `'sunday'` is correct; the backend stores `service_type='sunday'` for regular Sunday services. The documented enum `regular|special|midweek` was incorrect in the original review finding. Chart works as intended. (2026-05-19)
+- [ ] **BF7** — `js-reports.js` lines ~155–199 — People Insights chart block titles all display `"— undefined (N)"` because `scopeLabel` is used before its `var` declaration at line ~225 (hoisted as `undefined`). Fix: move the `scopeLabel` declaration to before Block 1. (`src/frontend/js-reports.js`)
+- [ ] **BF8** — `api-households.js` line ~354 — `b.active?1:1` always evaluates to `1`; a request with `active: false` still creates an active fund. Fix: `b.active == null ? 1 : b.active ? 1 : 0`. (`api-households.js`)
+- [ ] **BF9** — `api-people.js` line ~471 — soft-delete sets `active=0` but leaves `status='active'`. Queries that filter by `status='active'` (e.g., bulk address validation) pick up soft-deleted people. Fix: also set `status='archived'` on soft delete. (`api-people.js`)
+- [ ] **BF10** — `api-emails.js` lines ~342–343 — null `household_id` on anniversary audit log row. See BF3 above; this is the write side. (`api-emails.js`)
+- [x] **BF11** — Closed — already correct. The profile-view tag chip render (line ~909) sets `data-picked="1"` when `on` is true. The `getSelectedTagIds` bug (FH7) is a separate issue in the person edit *modal* picker (`openPersonEdit`), tracked under FH7. (2026-05-19)
+- [ ] **BF12** — `api-utils.js` line ~74 — `normalizePhone()` crashes with `TypeError: raw.replace is not a function` when passed a non-string object (e.g., `{}`). The existing `if (!raw) return ''` guard handles null/undefined/0/false but not truthy non-strings. This is the open **BUG1** in NOTES.md. Fix: change the guard to `if (!raw || typeof raw !== 'string') return ''`. (`api-utils.js`)
+- [ ] **BF13** — `js-dashboard.js` lines ~471 — notes string in the `followupEditNotes` onclick is not backslash-escaped; `C:\Users\name` produces `\U` and `\n` escape sequences in the JS parser. Fix: store notes in a `data-notes` attribute and read it in the handler. (`src/frontend/js-dashboard.js`)
+- [x] **BF14** — Closed — intentional. Each Sunday creates 2 service records (8am + 10:45am), so `d.inserted / 2` correctly reports Sunday count, not service count. Never produces a fraction because the API always inserts in pairs. (2026-05-19)
+
+**Done when:** All fourteen items fixed, `npm test` passes, manual verification of: attendance chart renders, People Insights titles show scope, birthday emails skip deceased, register import processes a real CSV.
+
+---
+
+### Phase 11 — Performance & N+1 Query Fixes
+**Goal:** Eliminate patterns that will timeout the Cloudflare Worker under real data volumes (>200 people, >50 tags, >100 services) and remove unnecessary repeat round-trips in the frontend.
+
+- [ ] **PF1** — `api-admin.js` lines ~286–343 — N+1 DB queries in signups and events handlers. For each signup: two sequential `db.prepare().all()` calls. For each event: one roles query + one count-per-role query. Fix: bulk-fetch all slots by `signup_id IN (...)`, all people by `person_id IN (...)`, all roles and fill-counts by event IDs — join in JS. (`api-admin.js`)
+- [ ] **PF2** — `api-import.js` line ~226 — `import/breeze-attendance-sync` makes one sequential Breeze API call per service row; hundreds of services exhaust the 30-second CPU budget. Fix: batch requests with `Promise.allSettled` in groups of 20–30, or cap and return a `done: false` cursor for the frontend to loop. (`api-import.js`)
+- [ ] **PF3** — `api-import.js` lines ~1830–1888 — CSV giving import: giving entry INSERTs are already batched (fixed). Remaining issue: new fund and batch CREATE/UPDATE calls still fire individually inside the per-row loop on first encounter of each new fund/batch. In practice rare (most funds/batches already exist), but fix by pre-scanning pass 1 for unique new batches/funds and bulk-creating before the main insert pass. (`api-import.js`)
+- [ ] **PF4** — `api-import.js` lines ~2093–2184 — tag-sync `phase=list` makes 2–3 sequential DB queries per Breeze tag in a loop. `phase=sync` is already fixed (pre-loads all tags into a `Map`, uses `db.batch()` for inserts). Fix `phase=list` to match: pre-load all local tags by `breeze_id` and `name` into Maps before the loop, do lookups in JS, and batch any UPDATE/INSERT statements. (`api-import.js`)
+- [ ] **PF5** — `api-people.js` line ~270 — `bulk-member-type` has no D1 param chunking; crashes when `ids.length >= 90` (the +1 `mt` param puts it over the ~100 limit). `bulk-sacrament` at lines ~286–300 correctly chunks at 89. Apply the same `CHUNK = 89` loop. (`api-people.js`)
+- [ ] **PF6** — `api-households.js` lines ~124–131 — `fix-heads`: SELECT + UPDATE per headless household, serially. With hundreds of headless households this serially issues 2N D1 calls. Fix: use a CTE or `db.batch()`. (`api-households.js`)
+- [ ] **PF7** — `api-utils.js` lines ~415–418 — `normalize-phones`: one `UPDATE` per changed row. Fix: collect all updates and fire as a single `db.batch()`. (`api-utils.js`)
+- [ ] **PF8** — `api-reports.js` lines ~619–635 — 5-year trend runs 5 sequential awaited DB queries. Fix: `Promise.all(trendYears.map(...))`. (`api-reports.js`)
+- [ ] **PF9** — `api-reports.js` line ~1149 — giving-by-method uses a correlated subquery for `batch_date` per row instead of an explicit `JOIN giving_batches`. Fix: replace the correlated subquery with `JOIN giving_batches gb ON ge.batch_id=gb.id`. (`api-reports.js`)
+- [ ] **PF10** — `api-people.js` lines ~169–174 — `household_size` filter generates a correlated `SELECT COUNT(*)` subquery per candidate row. Fix: pre-aggregate with a CTE `WITH hh_counts AS (SELECT household_id, COUNT(*) n FROM people WHERE active=1 GROUP BY household_id)` and JOIN. (`api-people.js`)
+- [ ] **PF11** — `js-giving.js` line ~25 — `filterBatchSearch` fetches from the API on every keystroke. The filtering is client-side (`renderBatchList`). Fix: cache the last fetch result; call `renderBatchList(_lastBatches)` directly from `filterBatchSearch` with no API call. Add debounce if a server-side search is ever added. (`src/frontend/js-giving.js`)
+- [x] **PF12** — Closed — current pattern (calling both `openBatch` and `loadBatches` after entry add/delete) is correct. Both refreshes are needed: `openBatch` updates the entry table, `loadBatches` updates the batch sidebar total. No change needed. (2026-05-19)
+- [ ] **PF13** — `api-people.js` lines ~255–257 and ~417–419 — tag inserts on create/update run one `INSERT OR IGNORE` per tag serially. Fix: replace with `db.batch()`. (`api-people.js`)
+
+**Done when:** All items fixed; verify that a full Breeze attendance sync, a tag sync, and a 500-person giving-by-method report all complete within the 30-second Worker limit.
+
+---
+
+### Phase 12 — Frontend Hygiene & API Consistency
+**Goal:** Bring all API calls through the `api()` helper (for 401-redirect handling), eliminate redundant network round-trips, and fix low-severity UX/logic bugs.
+
+- [ ] **FH1** — `js-volunteers.js` — all 16+ `fetch()` calls bypass the `api()` helper. Session expiry silently fails or returns raw JSON instead of redirecting to login. Replace all `fetch(url, { credentials: 'same-origin' })` with `api(url)` / `api(url, opts)`. (`src/frontend/js-volunteers.js`)
+- [ ] **FH2** — `js-export-import.js` — `runBreezeGivingSync`, `runBreezeGivingAll`, `importGivingCSV`, `importPeopleCSV` use raw `fetch()`. Same fix as FH1. (`src/frontend/js-export-import.js`)
+- [ ] **FH3** — `js-people.js` lines ~984–1173 — photo upload/delete/copy endpoints use raw `fetch()` (FormData upload path). Add 401 detection and consistent error propagation matching the `api()` helper pattern; at minimum add `.catch` error display for `usePVPhotoFrom`. (`src/frontend/js-people.js`)
+- [ ] **FH4** — `js-people.js` lines ~313–327 — `applyBulkTags` makes 2N sequential API calls (GET + PUT per person). Add a `POST /admin/api/people/bulk-tags` endpoint (body: `{ tag_ids, person_ids, mode: 'add|remove|set' }`) and call it as a single round-trip. (`api-people.js` + `src/frontend/js-people.js`)
+- [x] **FH5** — Closed — `createHouseholdFromPerson` reads directly from form fields; no intermediate GET person call exists. Original finding was incorrect. (2026-05-19)
+- [ ] **FH6** — `js-dashboard.js` line ~679 and `js-people.js` lines ~937, ~1449 — `markSeenToday`, `savePvTags`, `confirmAddToHh` send the full `_currentPvPerson` snapshot via PUT, overwriting fields changed concurrently. Use `pvBuildPersonPatch` (or a dedicated PATCH endpoint) so only the intended field is sent. (`src/frontend/js-dashboard.js`, `js-people.js`)
+- [ ] **FH7** — `js-people.js` lines ~1980–1988 — `getSelectedTagIds` detects selected chips via `el.style.borderColor` string comparison (fragile across browsers). `toggleTagPick()` already sets `el.dataset.picked = '1'`. Fix: `if (el.dataset.picked === '1') ids.push(parseInt(el.dataset.tid))`. (`src/frontend/js-people.js`)
+- [ ] **FH8** — `js-people.js` lines ~2017–2036 — `gender` and `marital_status` are assigned twice in `savePerson`; the first assignment (lines ~2017–2018) is dead code. Remove the duplicate lines. (`src/frontend/js-people.js`)
+- [ ] **FH9** — `js-attendance.js` resize handler line ~123 — Christmas marker hardcoded to `2026` inside the resize redraw path (`var cx2=xAtDate2(2026,12,25)`). The main `renderAttendanceChart` function already draws markers correctly per year. Fix: replace the hardcoded `2026` in the resize handler with the chart's actual year range. (`src/frontend/js-attendance.js`)
+- [x] **FH10** — Closed — resize handlers properly call `document.removeEventListener` for both `mousemove` and `mouseup` inside the `mouseup` callback. No accumulation occurs. (2026-05-19)
+- [ ] **FH11** — `js-households.js` lines ~15–26 and ~278–317 — `loadHouseholds` and `loadOrganizations` have no `.catch()` handlers; the "Loading…" status is never cleared on error. Add `.catch(function() { setStatus('h-status', 'Error loading.', 'err'); })`. Same gap in `openHouseholdDetail`, `openBatch`. (`src/frontend/js-households.js`, `js-giving.js`)
+- [ ] **FH12** — `js-export-import.js` lines ~69–86 — `doSendBatch` promise chain: the no-email early-exit path returns `undefined`, which the downstream `.then(r => r && r.ok ? ...)` treats as a failure, silently inflating the failed count. Fix the promise chain so skipped-no-email rows increment `skipped` not `failed`. (`src/frontend/js-export-import.js`)
+- [ ] **FH13** — `js-export-import.js` line ~743 — `runBreezeTagSync` uses the deprecated global `event` object; when called programmatically after a people import, it disables the wrong button and never restores its label. Fix: accept an explicit `btnEl` parameter and pass `this` from the onclick. (`src/frontend/js-export-import.js`)
+- [ ] **FH14** — `js-volunteers.js` line ~241 — volunteer "To:" display receives an already-HTML-entity-encoded name/email (from the onclick attribute), then assigns it to `.textContent`, showing `&amp;` literals. Fix: pass raw values through `data-*` attributes and read them in `volOpenSendEmail`. (`src/frontend/js-volunteers.js`)
+- [x] **FH15** — Closed — intentional by design. Empty fields are excluded from the payload so they don't overwrite existing stored values (documented with a comment in the code). This is correct UX: blank = "leave unchanged". (2026-05-19)
+
+**Done when:** All items fixed; verify volunteers tab works after session expiry (redirect to login), bulk tag apply sends one request, and giving batch search filters without a network call.
+
+---
+
+### Phase 13 — Low-Priority Polish & Robustness
+**Goal:** Minor correctness gaps, dead code, hardcoded values, and defense-in-depth improvements. Low risk; no urgency.
+
+- [ ] **LP1** — `api-people.js` lines ~490, 495, 502 — archive audit log builds person name as `"${first} ${last}"` which produces `"null Smith"` if either field is null. Fix: `[person.first_name, person.last_name].filter(Boolean).join(' ')`. (`api-people.js`)
+- [ ] **LP2** — `api-people.js` line ~758 — audit undo `b.id` is not validated as an integer; a non-numeric value returns 404 instead of 400. Fix: `if (!Number.isInteger(b.id)) return json({ error: 'Invalid id' }, 400)`. (`api-people.js`)
+- [ ] **LP3** — `api-emails.js` line ~84 — `reply_to` address is hardcoded as `office@timothystl.org` in `sendResend`. Move to `env.REPLY_TO_EMAIL` or a `chms_config` key so it can change without a deploy. (`api-emails.js`)
+- [ ] **LP4** — `api-import.js` line ~413 — `register/clear` only accepts `baptism|confirmation|wedding`; `funeral` and `anniversary` type entries can never be cleared. Add those types to the allowlist or document the intentional restriction. (`api-import.js`)
+- [ ] **LP5** — `api-import.js` lines ~654–670 — CSV parser does not handle `""` escaped double-quotes per RFC 4180; Breeze notes fields with embedded quotes would be mangled. Fix: when inside a quoted field and the next char is also `"`, consume both as one literal quote. (`api-import.js`)
+- [ ] **LP6** — `api-import.js` line ~1747 — `ghostFundContribs` diagnostic runs a full `giving_entries` table scan after every sync even when there are no placeholder funds. Add `LIMIT 50` to bound the scan. (`api-import.js`)
+- [ ] **LP7** — `api-utils.js` line ~251 — Census geocoder fallback returns `deliverable: true` for any geocoded address even though it does no delivery-point validation (DPV). Add `source: 'census'` to the response so callers can show a caveat. (`api-utils.js`)
+- [ ] **LP8** — `api-admin.js` line ~155 — break-glass `env.ADMIN_PASSWORD` still works if a DB user named `"admin"` is deactivated; interaction is undocumented. Add a comment clarifying the behavior. (`api-admin.js`)
+- [ ] **LP9** — `api-people.js` lines ~694, 740 — `GET /followup` and `GET /audit` have no inner role guards; they rely solely on the outer ACL in `api-chms.js`. Add `if (!isStaff)` guards for defense-in-depth, matching the pattern used elsewhere. (`api-people.js`)
+- [ ] **LP10** — `js-settings.js` line ~135 — `deleteUser` receives username as a JS string arg through the onclick; a username containing a backslash or crafted content could mislead the `confirm()` dialog. Fix: look up the username from `_usersData[id]` inside `deleteUser` instead of accepting it as a string argument. (`src/frontend/js-settings.js`)
+- [ ] **LP11** — `js-giving.js` line ~20 — `_pendingOpenBatchId` is not cleared on API error; on the next successful `loadBatches` call it opens a stale batch ID. Fix: clear it before the `api()` call or in a `.catch`. (`src/frontend/js-giving.js`)
+- [ ] **LP12** — `js-households.js` line ~410 — `createHouseholdFromPerson` POST is missing the `Content-Type: application/json` header. Add `headers: { 'Content-Type': 'application/json' }` consistent with every other POST in the codebase. (`src/frontend/js-households.js`)
+- [ ] **LP13** — `js-dashboard.js` lines ~591, 595 — `dateStr` fallback puts `p.dob` directly in `innerHTML` when the date format is unexpected. Fix: `esc(p.dob || '')`. (`src/frontend/js-dashboard.js`)
+- [ ] **LP14** — `js-volunteers.js` lines ~653–656 — stray `</script></body></html>` at the end of the template string. Remove; it is dead markup inside the assembled SPA. (`src/frontend/js-volunteers.js`)
+- [ ] **LP15** — `js-core.js` lines ~58–65 and ~173–176 — `openPersonDetail` and `goToProfile` are near-duplicates. Make `openPersonDetail` a thin wrapper around `goToProfile`. (`src/frontend/js-core.js`)
+- [ ] **LP16** — `js-export-import.js` line ~834 — chunk import error halts without reporting how many rows were processed before the failure. Update the status message to: `"Imported X of Y rows before error on chunk N."` (`src/frontend/js-export-import.js`)
+- [ ] **LP17** — `js-attendance.js` — non-Sunday inline edit row has no delete button and no notes field, even though the form exists for special/midweek services that may need deletion. Add delete button to the non-Sunday edit path. (`src/frontend/js-attendance.js`)
+
+**Done when:** All items resolved; each either fixed or formally documented as intentional with a reason.
+
+---
+
 ## Queued Items (add new ones here during sessions)
 
 <!-- Add items here as they come up. Format: - [ ] Description (noted YYYY-MM-DD) -->
