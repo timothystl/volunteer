@@ -110,7 +110,7 @@ a{color:var(--sky-steel);}
 .pill-section{display:inline-flex;align-items:center;padding:3px 11px;border-radius:99px;font-family:var(--font-body);font-size:10px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:#fff;white-space:nowrap;line-height:1.4;}
 .pill-section.pill-people{background:var(--color-navy);}
 .pill-section.pill-ministry{background:var(--color-teal);}
-.pill-section.pill-giving{background:var(--color-gold);}
+.pill-section.pill-giving{background:var(--color-gold);color:var(--color-navy);}
 .pill-section[hidden]{display:none;}
 /* ── BUTTONS ── */
 .btn-primary{padding:8px 18px;background:var(--steel-anchor);color:var(--white);border:none;border-radius:8px;font-family:var(--font-body);font-size:.9rem;font-weight:700;cursor:pointer;transition:background .15s;}
