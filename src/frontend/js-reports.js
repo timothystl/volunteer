@@ -75,6 +75,8 @@ function runPeopleInsights(scope) {
   api('/admin/api/reports/people-insights?scope=' + encodeURIComponent(_peopleInsightsScope)).then(function(d) {
     if (d.error) { alert(d.error); return; }
 
+    var scopeLabel = d.scope === 'member' ? 'Members' : 'All Active';
+
     // ── Block 1: New contacts by month (bar chart) ──────────────────
     var contacts = d.new_contacts || [];
     var contactBlock = '';
@@ -222,7 +224,6 @@ function runPeopleInsights(scope) {
       + '<div style="font-size:.78rem;color:var(--warm-gray);margin-bottom:8px;">Members only — baptized and confirmed flags from Breeze profile.</div>'
       + plRows + '</div>';
 
-    var scopeLabel = d.scope === 'member' ? 'Members' : 'All Active';
     var scopeBar = '<div style="display:flex;gap:6px;margin-bottom:14px;">'
       + ['member','active'].map(function(s) {
           var lbl = s === 'member' ? 'Members Only' : 'All Active';

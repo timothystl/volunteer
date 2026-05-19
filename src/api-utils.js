@@ -72,7 +72,7 @@ export function isGivingDup(pid, nthOcc, existingIds) {
 // Strips formatting and returns (XXX) XXX-XXXX for 10-digit US numbers.
 // Returns original string unchanged for international or unusual formats.
 export function normalizePhone(raw) {
-  if (!raw) return '';
+  if (!raw || typeof raw !== 'string') return '';
   const digits = raw.replace(/\D/g, '');
   if (digits.length === 11 && digits[0] === '1') {
     return '(' + digits.slice(1, 4) + ') ' + digits.slice(4, 7) + '-' + digits.slice(7);

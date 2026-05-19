@@ -467,9 +467,12 @@ if (pmatch) {
     if (hard && !isAdmin) return json({ error: 'Access denied: permanent delete requires admin access' }, 403);
     if (hard) {
       await db.prepare('DELETE FROM person_tags WHERE person_id=?').bind(pid).run();
+      await db.prepare('DELETE FROM giving_entries WHERE person_id=?').bind(pid).run();
+      await db.prepare('DELETE FROM follow_up_items WHERE person_id=?').bind(pid).run();
+      await db.prepare('DELETE FROM audit_log WHERE entity_id=? AND entity_type=?').bind(pid, 'person').run();
       await db.prepare('DELETE FROM people WHERE id=?').bind(pid).run();
     } else {
-      await db.prepare('UPDATE people SET active=0 WHERE id=?').bind(pid).run();
+      await db.prepare("UPDATE people SET active=0, status='archived' WHERE id=?").bind(pid).run();
     }
     return json({ ok: true });
   }
