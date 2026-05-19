@@ -330,11 +330,11 @@ function regImportFileChosen(input) {
 }
 function parseRegImportFile(text, filename) {
   // Detect delimiter: if splitting first line by tab gives 5+ fields, use tab
-  var lines = text.replace(/\\r\\n/g,'\\n').replace(/\\r/g,'\\n').split('\\n').filter(function(l){ return l.trim(); });
+  var lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(function(l){ return l.trim(); });
   if (lines.length < 2) return { error: 'File has fewer than 2 lines — need a header row and at least one data row.' };
-  var delim = lines[0].split('\\t').length >= 5 ? '\\t' : ',';
+  var delim = lines[0].split('\t').length >= 5 ? '\t' : ',';
   function parseLine(line) {
-    if (delim === '\\t') return line.split('\\t').map(function(c){ return c.trim(); });
+    if (delim === '\t') return line.split('\t').map(function(c){ return c.trim(); });
     // CSV: handle quoted fields
     var cols = [], cur = '', inQ = false;
     for (var ci = 0; ci < line.length; ci++) {
@@ -348,9 +348,9 @@ function parseRegImportFile(text, filename) {
     cols.push(cur.trim());
     return cols;
   }
-  var headers = parseLine(lines[0]).map(function(h){ return h.toLowerCase().replace(/[^a-z0-9]/g,' ').trim().replace(/\\s+/g,' '); });
+  var headers = parseLine(lines[0]).map(function(h){ return h.toLowerCase().replace(/[^a-z0-9]/g,' ').trim().replace(/\s+/g,' '); });
   function col(names) {
-    var norm = function(s) { return s.toLowerCase().replace(/[^a-z0-9]/g,' ').trim().replace(/\\s+/g,' '); };
+    var norm = function(s) { return s.toLowerCase().replace(/[^a-z0-9]/g,' ').trim().replace(/\s+/g,' '); };
     for (var ni = 0; ni < names.length; ni++) {
       var idx = headers.indexOf(norm(names[ni]));
       if (idx >= 0) return idx;
@@ -414,9 +414,9 @@ function normalizeRegDate(s) {
   if (!s) return '';
   s = s.trim();
   // Already ISO YYYY-MM-DD
-  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   // Already ISO YYYY-MM → use 01 as day
-  if (/^\\d{4}-\\d{2}$/.test(s)) return s+'-01';
+  if (/^\d{4}-\d{2}$/.test(s)) return s+'-01';
   var MONTHS = {
     january:'01',jan:'01',february:'02',feb:'02',march:'03',mar:'03',
     april:'04',apr:'04',may:'05',june:'06',jun:'06',july:'07',jul:'07',
@@ -425,22 +425,22 @@ function normalizeRegDate(s) {
   };
   var m;
   // MM/DD/YYYY or M-D-YYYY (slash or dash separator, year last)
-  m = s.match(/^(\\d{1,2})[\\/-](\\d{1,2})[\\/-](\\d{4})$/);
+  m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (m) return m[3]+'-'+pad2(m[1])+'-'+pad2(m[2]);
   // MM/DD/YY or M-D-YY (2-digit year → 19xx for historical records)
-  m = s.match(/^(\\d{1,2})[\\/-](\\d{1,2})[\\/-](\\d{2})$/);
+  m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2})$/);
   if (m) return '19'+m[3]+'-'+pad2(m[1])+'-'+pad2(m[2]);
   // Month D(st/nd/rd/th)?, YYYY  e.g. "July 1, 1928" or "July 1st, 1928"
-  m = s.match(/^([A-Za-z]+)\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})$/);
+  m = s.match(/^([A-Za-z]+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/);
   if (m && MONTHS[m[1].toLowerCase()]) return m[3]+'-'+MONTHS[m[1].toLowerCase()]+'-'+pad2(m[2]);
   // D(st/nd/rd/th)? Month YYYY  e.g. "1 July 1928" or "1st July 1928"
-  m = s.match(/^(\\d{1,2})(?:st|nd|rd|th)?\\s+([A-Za-z]+)\\.?\\s+(\\d{4})$/);
+  m = s.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\.?\s+(\d{4})$/);
   if (m && MONTHS[m[2].toLowerCase()]) return m[3]+'-'+MONTHS[m[2].toLowerCase()]+'-'+pad2(m[1]);
   // Month YYYY  e.g. "July 1928" (no day — store as 1st of month)
-  m = s.match(/^([A-Za-z]+)\\.?\\s+(\\d{4})$/);
+  m = s.match(/^([A-Za-z]+)\.?\s+(\d{4})$/);
   if (m && MONTHS[m[1].toLowerCase()]) return m[2]+'-'+MONTHS[m[1].toLowerCase()]+'-01';
   // YYYY only — store as Jan 1 of that year
-  m = s.match(/^(\\d{4})$/);
+  m = s.match(/^(\d{4})$/);
   if (m) return m[1]+'-01-01';
   return s;
 }

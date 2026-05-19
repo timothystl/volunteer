@@ -259,6 +259,7 @@ export async function sendBirthdayEmails(env) {
   const people = (await db.prepare(
     `SELECT id, first_name, last_name, email FROM people
      WHERE active=1 AND (status IS NULL OR status='active')
+       AND (deceased=0 OR deceased IS NULL)
        AND LOWER(member_type) NOT IN ('visitor','inactive','other','organization')
        AND email != '' AND dob != ''
        AND strftime('%m-%d', dob) = ?`
@@ -329,6 +330,7 @@ export async function sendAnniversaryEmails(env) {
     if (members.length >= 2) {
       const p2 = members[1];
       const sharedEmail = p1.email && p2.email && p1.email === p2.email;
+      const hhKey = p1.household_id || p1.id;
       if (sharedEmail) {
         // One email addressed to both
         const result = await sendResend(env, p1.email,
@@ -339,13 +341,14 @@ export async function sendAnniversaryEmails(env) {
           sent++;
           await db.prepare(
             `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,new_value) VALUES(?,?,?,?,?,?)`
-          ).bind('anniversary_email_sent', 'household', p1.household_id,
+          ).bind('anniversary_email_sent', 'household', hhKey,
             `${p1.first_name} & ${p2.first_name}`, 'email', p1.email).run();
         } else {
           errors.push(`${p1.first_name} & ${p2.first_name}: ${result.error}`);
         }
       } else {
         // Separate emails — send to each who has an address
+        let atLeastOneSent = false;
         for (const [person, partner] of [[p1, p2], [p2, p1]]) {
           if (!person.email) continue;
           const result = await sendResend(env, person.email,
@@ -354,15 +357,16 @@ export async function sendAnniversaryEmails(env) {
             anniversaryHtml(person.first_name, partner.first_name));
           if (result.ok) {
             sent++;
+            atLeastOneSent = true;
           } else {
             errors.push(`${person.first_name}: ${result.error}`);
           }
         }
-        // Log once for the household (dedup key)
-        if (!errors.find(e => e.startsWith(p1.first_name + ':') || e.startsWith(p2.first_name + ':'))) {
+        // Log once for the household as long as at least one email succeeded
+        if (atLeastOneSent) {
           await db.prepare(
             `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,new_value) VALUES(?,?,?,?,?,?)`
-          ).bind('anniversary_email_sent', 'household', p1.household_id,
+          ).bind('anniversary_email_sent', 'household', hhKey,
             `${p1.first_name} & ${p2.first_name}`, 'email', [p1.email, p2.email].filter(Boolean).join(', ')).run();
         }
       }

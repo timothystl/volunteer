@@ -227,8 +227,10 @@ function followupMarkDone(personId) {
   });
 }
 
-function followupEditNotes(personId, currentNotes) {
-  var next = prompt('Follow-up notes (saved to this contact):', currentNotes || '');
+function followupEditNotes(personId) {
+  var row = document.getElementById('fu-row-' + personId);
+  var currentNotes = row ? (row.dataset.notes || '') : '';
+  var next = prompt('Follow-up notes (saved to this contact):', currentNotes);
   if (next === null) return;
   api('/admin/api/engagement/update-followup', {
     method: 'POST',
@@ -460,15 +462,14 @@ function renderDashboard(d) {
         if (p.email) meta.push(esc(p.email));
         if (p.phone) meta.push(esc(p.phone));
         if (p.followup_status) meta.push('status: ' + esc(p.followup_status.replace(/_/g, ' ')));
-        var notesEsc = (p.followup_notes || '').replace(/"/g, '&quot;');
-        return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--linen);" id="fu-row-'+p.id+'">'
+        return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid var(--linen);" id="fu-row-'+p.id+'" data-notes="'+esc(p.followup_notes||'')+'">'
           + '<div style="flex:1;min-width:0;">'
           +   '<div style="font-weight:600;color:var(--steel-anchor);cursor:pointer;" onclick="openPersonDetail('+p.id+')">' + esc(name) + '</div>'
           +   '<div style="font-size:.75rem;color:var(--warm-gray);">' + meta.join(' · ') + '</div>'
           +   (p.followup_notes ? '<div style="font-size:.78rem;color:var(--charcoal);margin-top:4px;font-style:italic;">"' + esc(p.followup_notes) + '"</div>' : '')
           + '</div>'
           + '<div style="display:flex;gap:4px;flex-shrink:0;">'
-          +   '<button class="btn-sm" style="padding:3px 8px;font-size:.72rem;background:var(--linen);border:1px solid var(--border);border-radius:6px;cursor:pointer;" onclick="followupEditNotes('+p.id+',\''+notesEsc.replace(/\\\'/g,"\\\\'")+'\')" title="Add or edit notes">Notes</button>'
+          +   '<button class="btn-sm" style="padding:3px 8px;font-size:.72rem;background:var(--linen);border:1px solid var(--border);border-radius:6px;cursor:pointer;" onclick="followupEditNotes('+p.id+')" title="Add or edit notes">Notes</button>'
           +   '<button class="btn-sm" style="padding:3px 8px;font-size:.72rem;background:var(--pale-sage);border:1px solid var(--soft-sage);border-radius:6px;cursor:pointer;color:var(--on-pale-sage);" onclick="followupMarkDone('+p.id+')" title="Mark follow-up complete">Done</button>'
           +   '<button class="btn-sm" style="padding:3px 8px;font-size:.72rem;background:var(--linen);border:1px solid var(--border);border-radius:6px;cursor:pointer;" onclick="openPersonDetail('+p.id+')" title="Open profile">Open</button>'
           + '</div></div>';

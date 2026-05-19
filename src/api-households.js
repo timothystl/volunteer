@@ -354,7 +354,7 @@ export async function handleHouseholdsApi(req, env, url, method, seg, db, isAdmi
     let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
     const r = await db.prepare(
       `INSERT INTO funds (name,description,active,sort_order) VALUES (?,?,?,?)`
-    ).bind(b.name||'New Fund',b.description||'',b.active?1:1,b.sort_order||0).run();
+    ).bind(b.name||'New Fund',b.description||'',b.active==null?1:b.active?1:0,b.sort_order||0).run();
     return json({ ok: true, id: r.meta?.last_row_id });
   }
   const fundmatch = seg.match(/^funds\/(\d+)$/);
