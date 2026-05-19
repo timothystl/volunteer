@@ -6,9 +6,14 @@ Read this at the start of every session. Update NOTES.md (and this file if neede
 
 ## What This App Is
 
-Church Management System (ChMS) for Timothy Lutheran Church. Built on **Cloudflare Workers + D1 (SQLite)**. Single-page app served from `src/html-chms.js` (renders as one large HTML string). API routes live in domain modules under `src/` — all delegated from `src/api-chms.js` — plus `src/api-admin.js` (auth, users, scheduler).
+**TLC Gather** — the Church Management System (ChMS) for Timothy Lutheran Church. Built on **Cloudflare Workers + D1 (SQLite)**. Single-page admin app assembled from per-tab modules under `src/frontend/` (shell in `src/html-chms.js`). API routes live in domain modules under `src/` — all delegated from `src/api-chms.js` — plus `src/api-admin.js` (auth, users, scheduler).
 
-**Live at:** `https://chms.timothystl.org` (old `volunteer.timothystl.org/chms` redirects here)
+The same Worker also serves the **public volunteer signup site** at `volunteer.timothystl.org`, assembled from per-ministry modules under `src/public/`.
+
+**Live at:**
+- `https://chms.timothystl.org` — admin app (old `volunteer.timothystl.org/chms` redirects here)
+- `https://volunteer.timothystl.org` — public ministry signup
+- Brand: TLC Gather (navy/teal/gold three-pillar system: People / Ministry / Giving). PWA icons under `icons/`.
 
 ---
 
@@ -26,9 +31,13 @@ Church Management System (ChMS) for Timothy Lutheran Church. Built on **Cloudfla
 | `src/api-reports.js` | Reports, engagement queue, prayer requests, reconcile tools |
 | `src/api-import.js` | Import/sync, config, register, export, Breeze sync |
 | `src/api-utils.js` | Shared utilities (disambiguateHHName, isoWeekKey) |
-| `src/html-chms.js` | Entire frontend SPA (HTML + CSS + JS as a string) |
+| `src/html-chms.js` | Admin SPA shell (~300 lines) — imports & concatenates the per-tab modules below |
+| `src/frontend/*.js` | Per-tab admin modules: `html-head.js`, `html-tabs.js`, `js-core.js`, `js-{settings,dashboard,people,register,households,giving,reports,export-import,attendance,volunteers}.js` |
+| `src/html-templates.js` | Login page HTML + assembly of `PUBLIC_HTML` (volunteer.timothystl.org) from `src/public/` modules |
+| `src/public/{head,landing,footer,scripts}.js` | Public site shell: head/CSS, landing card grid, footer, JS |
+| `src/public/ministries/*.js` | One file per ministry detail page (worship, education, acceptance, outreach, wol, lasm, cfna, transportation, events, general) |
 | `src/auth.js` | Cookie auth, PBKDF2 password hashing, helpers |
-| `src/html-templates.js` | Login page HTML |
+| `icons/` | PWA icons (16/32/180/192/512/512-maskable) + `tlc-gather-icon.svg` source |
 | `NOTES.md` | Full backlog, resolved issues, recent changes |
 | `wrangler.toml` | Cloudflare Worker config |
 
@@ -198,6 +207,12 @@ Use this as the session-to-session roadmap. Complete one phase fully before star
 ## Queued Items (add new ones here during sessions)
 
 <!-- Add items here as they come up. Format: - [ ] Description (noted YYYY-MM-DD) -->
+
+### Branding / Public Site (2026-05)
+- [x] **BR2** — TLC Gather rebrand. Done 2026-05 (PRs #454–#457). Three-pillar identity (People/Ministry/Giving), Cormorant Garamond + DM Sans, navy/teal/gold tokens, sidebar mark + wordmark lockup, topbar pill driven by `showTab()`, PWA icons + manifest under `icons/`.
+- [x] **VS1** — Public volunteer page (`volunteer.timothystl.org`): added Transportation Ministry signup card. Done 2026-05 (PR #452).
+- [x] **VS2** — `PUBLIC_HTML` split into per-section modules under `src/public/`, mirroring the IN3 split of `html-chms.js`. Each ministry is now a ~100-line file editable without sub-agent. Done 2026-05 (PR #453).
+- [x] **BX1** — `member_type` case bug: Breeze returns "Member" (capitalized). All write sites now lowercase at the JS binding level + defensive `LOWER()` pass at end of each batch sync. Done 2026-05.
 
 ### Auth / Login
 - [ ] **AU1** — Forgot password flow: add email field to each user account in admin; add "Forgot password?" link on login page that sends a reset email via Resend. (noted 2026-05-01)
@@ -414,7 +429,7 @@ Run through this at the end of any session before pushing, or at the start of a 
 - [ ] `DEPLOY_VERSION` is bumped
 - [ ] `NOTES.md` Recent Changes has an entry for this version
 - [ ] `CLAUDE.md` Queued Items updated — new items added, completed items checked off
-- [ ] Pushed to `claude/review-claude-md-f62iL`, not main
+- [ ] Pushed to the current session branch (per-session `claude/*` branch), not main
 
 ---
 
@@ -429,6 +444,9 @@ Run through this at the end of any session before pushing, or at the start of a 
 - `api()` helper in frontend handles 401→redirect. Always use it instead of raw `fetch` for `/admin/api/*` calls.
 - All modals have specific IDs (e.g. `person-modal`, `hh-modal`). There is no generic `modal-overlay`. Use `openModal(id)` / `closeModal(id)`.
 - DEPLOY_VERSION is at the top of `src/frontend/js-core.js` (moved from `html-chms.js` after IN3 split). Bump it on every commit that changes the frontend.
+- **Editing volunteer.timothystl.org**: do NOT search/edit `src/html-templates.js` for ministry copy — the public page is assembled from `src/public/` modules. To tweak a ministry, edit `src/public/ministries/<name>.js` directly. Global CSS lives in `src/public/head.js`; all JS (form handlers, routing) in `src/public/scripts.js`.
+- **Brand tokens** (TLC Gather): `--color-navy:#1E2D4A`, `--color-teal:#2E7EA6`, `--color-gold:#C9973A`, `--color-cream:#F8F4EE`. Fonts: Cormorant Garamond (display) + DM Sans (head/body). Three-pillar pill system in topbar driven by `pillars` map in `js-core.js` `showTab()`.
+- **member_type** is stored lowercased. Both Breeze write paths (per-person at line ~2442, bulk at line ~2777 of `api-import.js`) call `.toLowerCase()` before binding; a defensive `UPDATE … SET member_type=LOWER(member_type)` runs at end of each sync batch as a safety net. Frontend filters use `LOWER()` comparison.
 
 ---
 
@@ -438,4 +456,4 @@ Run through this at the end of any session before pushing, or at the start of a 
 
 ## Dev Branch
 
-Working branch: `claude/review-codebase-docs-ka3vu` — **merged to main 2026-04-25**. Create a new branch for each session's work. Do not push directly to main.
+Create a new branch for each session's work (pattern: `claude/<short-task>-<id>`). Do not push directly to main. Open a draft PR after pushing; GitHub Actions deploys on merge.
