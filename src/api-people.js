@@ -262,6 +262,7 @@ if (seg === 'people' && method === 'POST') {
 }
 
 if (seg === 'people/bulk-member-type' && method === 'POST') {
+  if (!isStaff) return json({ error: 'Access denied' }, 403);
   let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
   const mt = (b.member_type || '').toLowerCase();
@@ -754,6 +755,7 @@ if (seg === 'audit' && method === 'GET') {
   return json({ entries: rows });
 }
 if (seg === 'audit/undo' && method === 'POST') {
+  if (!isAdmin) return json({ error: 'Access denied' }, 403);
   let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const entry = await db.prepare('SELECT * FROM audit_log WHERE id=?').bind(b.id).first();
   if (!entry) return json({ error: 'Audit entry not found' }, 404);

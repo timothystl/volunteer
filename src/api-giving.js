@@ -3,6 +3,8 @@ import { json } from './auth.js';
 
 export async function handleGivingApi(req, env, url, method, seg, db, isAdmin, isFinance, isStaff, canEdit) {
 
+if (method !== 'GET' && !isFinance) return json({ error: 'Access denied' }, 403);
+
 // ── Giving Entries — list for a person ──────────────────────────
 if (seg === 'giving' && method === 'GET') {
   const personId = url.searchParams.get('person_id');

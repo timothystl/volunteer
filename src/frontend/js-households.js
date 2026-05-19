@@ -303,7 +303,7 @@ function loadOrganizations(reset) {
         +contact
         +(info ? '<div style="font-size:.78rem;color:var(--warm-gray);margin-top:2px;">'+info+'</div>' : '')
         +(addr ? '<div style="font-size:.75rem;color:var(--warm-gray);margin-top:2px;">'+esc(addr)+'</div>' : '')
-        +(o.website ? '<div style="font-size:.75rem;margin-top:2px;"><a href="'+esc(o.website)+'" target="_blank" onclick="event.stopPropagation();" style="color:var(--steel-anchor);">'+esc(o.website.replace(/^https?:\/\//,''))+'</a></div>' : '')
+        +(o.website && /^https?:\/\//i.test(o.website) ? '<div style="font-size:.75rem;margin-top:2px;"><a href="'+esc(o.website)+'" target="_blank" onclick="event.stopPropagation();" style="color:var(--steel-anchor);">'+esc(o.website.replace(/^https?:\/\//,''))+'</a></div>' : '')
         +'</div>';
     }).join('');
     // Pager
