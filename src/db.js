@@ -565,6 +565,8 @@ async function _doInitDb(db) {
       ministry TEXT NOT NULL DEFAULT '', subject TEXT NOT NULL DEFAULT '',
       body TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`,
+    // Speed up giving sync dedup, orphan cleanup, and reconcile-diagnose lookups.
+    'CREATE INDEX IF NOT EXISTS idx_giving_breeze ON giving_entries(breeze_id)',
   ];
   for (const m of migrations) {
     try { await db.prepare(m).run(); } catch(e) { /* column already exists */ }

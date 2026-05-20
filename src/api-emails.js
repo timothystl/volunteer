@@ -73,6 +73,33 @@ export async function brevoGetListContacts(env) {
   } catch (e) { return { ok: false, error: e.message }; }
 }
 
+// Central Time MM-DD for "today" — independent of when the cron/test fires.
+// Uses Intl with America/Chicago so DST is handled automatically.
+function centralTodayMMDD() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const mm = parts.find(p => p.type === 'month').value;
+  const dd = parts.find(p => p.type === 'day').value;
+  return `${mm}-${dd}`;
+}
+
+// Central Time day-of-week (0=Sun..6=Sat).
+function centralDayOfWeek(d) {
+  const wd = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago', weekday: 'short',
+  }).format(d || new Date());
+  return ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 })[wd];
+}
+
+// Escape user-provided strings before embedding in email HTML (BG3 defense-in-depth).
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+export { centralDayOfWeek };
+
 async function sendResend(env, to, subject, text, htmlBody) {
   const key = env.RESEND_API_KEY || '';
   const from = env.EMAIL_FROM || '';
@@ -105,8 +132,9 @@ function emailShell(body) {
 }
 
 function birthdayHtml(firstName) {
+  const n = esc(firstName);
   return emailShell(`
-    <p style="font-size:1.2rem;color:#0A3C5C;font-weight:600;margin-bottom:16px;">Happy Birthday, ${firstName}!</p>
+    <p style="font-size:1.2rem;color:#0A3C5C;font-weight:600;margin-bottom:16px;">Happy Birthday, ${n}!</p>
     <p style="color:#3D3530;line-height:1.7;">Wishing you a very blessed and joyful birthday. May God's grace and love surround you today and throughout the year ahead.</p>
     <p style="color:#3D3530;line-height:1.7;margin-top:16px;">With warm regards,<br>Your friends at Timothy Lutheran Church</p>`);
 }
@@ -116,8 +144,9 @@ function birthdayText(firstName) {
 }
 
 function anniversaryHtml(name1, name2) {
-  const greeting = name2 ? `Happy Anniversary, ${name1} and ${name2}!` : `Happy Anniversary, ${name1}!`;
-  const salutation = name2 ? `Dear ${name1} and ${name2},` : `Dear ${name1},`;
+  const n1 = esc(name1), n2 = name2 ? esc(name2) : null;
+  const greeting = n2 ? `Happy Anniversary, ${n1} and ${n2}!` : `Happy Anniversary, ${n1}!`;
+  const salutation = n2 ? `Dear ${n1} and ${n2},` : `Dear ${n1},`;
   return emailShell(`
     <p style="font-size:1.2rem;color:#0A3C5C;font-weight:600;margin-bottom:16px;">${greeting}</p>
     <p style="color:#3D3530;line-height:1.7;">${salutation}</p>
@@ -161,7 +190,7 @@ async function sendTwilioSms(env, to, content) {
 
 export async function sendBirthdayTexts(env) {
   const db = env.DB;
-  const todayMMDD = new Date().toISOString().slice(5, 10);
+  const todayMMDD = centralTodayMMDD();
   const alreadySent = new Set(
     ((await db.prepare(
       `SELECT entity_id FROM audit_log WHERE action='birthday_sms_sent' AND date(ts)=date('now')`
@@ -175,27 +204,32 @@ export async function sendBirthdayTexts(env) {
   ).bind(todayMMDD).all()).results || [];
   let sent = 0, skipped = 0;
   const errors = [];
+  const targets = [];
   for (const p of people) {
     if (alreadySent.has(String(p.id))) { skipped++; continue; }
     const e164 = normalizePhone(p.phone);
     if (!e164) { errors.push(`${p.first_name} ${p.last_name}: invalid phone ${p.phone}`); continue; }
-    const result = await sendTwilioSms(env, e164,
-      `Happy Birthday, ${p.first_name}! Wishing you a blessed day. - Timothy Lutheran Church`);
-    if (result.ok) {
-      sent++;
-      await db.prepare(
-        `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,new_value) VALUES(?,?,?,?,?,?)`
-      ).bind('birthday_sms_sent', 'person', p.id, `${p.first_name} ${p.last_name}`.trim(), 'phone', p.phone).run();
-    } else {
-      errors.push(`${p.first_name} ${p.last_name}: ${result.error}`);
-    }
+    targets.push({ p, e164 });
   }
+  const results = await Promise.all(targets.map(({ p, e164 }) =>
+    sendTwilioSms(env, e164, `Happy Birthday, ${p.first_name}! Wishing you a blessed day. - Timothy Lutheran Church`)
+      .then(r => ({ p, r }))));
+  const auditStmts = [];
+  for (const { p, r } of results) {
+    if (r.ok) {
+      sent++;
+      auditStmts.push(db.prepare(
+        `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,new_value) VALUES(?,?,?,?,?,?)`
+      ).bind('birthday_sms_sent', 'person', p.id, `${p.first_name} ${p.last_name}`.trim(), 'phone', p.phone));
+    } else errors.push(`${p.first_name} ${p.last_name}: ${r.error}`);
+  }
+  if (auditStmts.length) await db.batch(auditStmts);
   return { sent, skipped, errors, total: people.length };
 }
 
 export async function sendAnniversaryTexts(env) {
   const db = env.DB;
-  const todayMMDD = new Date().toISOString().slice(5, 10);
+  const todayMMDD = centralTodayMMDD();
   const alreadySent = new Set(
     ((await db.prepare(
       `SELECT entity_id FROM audit_log WHERE action='anniversary_sms_sent' AND date(ts)=date('now')`
@@ -217,6 +251,7 @@ export async function sendAnniversaryTexts(env) {
   }
   let sent = 0, skipped = 0;
   const errors = [];
+  const sends = []; // { hhKey, p, content, members, name2, p1 }
   for (const members of hhMap.values()) {
     const p1 = members[0];
     const dedupeKey = String(p1.household_id || p1.id);
@@ -224,22 +259,28 @@ export async function sendAnniversaryTexts(env) {
     const name2 = members.length >= 2 ? members[1].first_name : null;
     const greeting = name2 ? `Happy Anniversary, ${p1.first_name} and ${name2}!` : `Happy Anniversary, ${p1.first_name}!`;
     const content = `${greeting} Wishing you a blessed anniversary. - Timothy Lutheran Church`;
-    let householdSent = false;
     for (const p of members) {
       const e164 = normalizePhone(p.phone);
       if (!e164) continue;
-      const result = await sendTwilioSms(env, e164, content);
-      if (result.ok) { sent++; householdSent = true; }
-      else errors.push(`${p.first_name}: ${result.error}`);
-    }
-    if (householdSent) {
-      await db.prepare(
-        `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,new_value) VALUES(?,?,?,?,?,?)`
-      ).bind('anniversary_sms_sent', 'household', p1.household_id || p1.id,
-        `${p1.first_name}${name2 ? ' & ' + name2 : ''}`, 'phone',
-        members.map(p => p.phone).filter(Boolean).join(', ')).run();
+      sends.push({ p1, p, e164, content, name2, members });
     }
   }
+  const results = await Promise.all(sends.map(s =>
+    sendTwilioSms(env, s.e164, s.content).then(r => ({ s, r }))));
+  const householdSent = new Map();
+  for (const { s, r } of results) {
+    if (r.ok) { sent++; householdSent.set(String(s.p1.household_id || s.p1.id), s); }
+    else errors.push(`${s.p.first_name}: ${r.error}`);
+  }
+  const auditStmts = [];
+  for (const s of householdSent.values()) {
+    auditStmts.push(db.prepare(
+      `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,new_value) VALUES(?,?,?,?,?,?)`
+    ).bind('anniversary_sms_sent', 'household', s.p1.household_id || s.p1.id,
+      `${s.p1.first_name}${s.name2 ? ' & ' + s.name2 : ''}`, 'phone',
+      s.members.map(p => p.phone).filter(Boolean).join(', ')));
+  }
+  if (auditStmts.length) await db.batch(auditStmts);
   return { sent, skipped, errors, total: rows.length };
 }
 
@@ -247,7 +288,7 @@ export async function sendAnniversaryTexts(env) {
 
 export async function sendBirthdayEmails(env) {
   const db = env.DB;
-  const todayMMDD = new Date().toISOString().slice(5, 10); // "MM-DD"
+  const todayMMDD = centralTodayMMDD();
 
   // Dedup: skip anyone already emailed today
   const alreadySent = new Set(
@@ -267,20 +308,24 @@ export async function sendBirthdayEmails(env) {
 
   let sent = 0, skipped = 0;
   const errors = [];
-  for (const p of people) {
-    if (alreadySent.has(String(p.id))) { skipped++; continue; }
-    const result = await sendResend(env, p.email,
-      `Happy Birthday, ${p.first_name}!`,
-      birthdayText(p.first_name), birthdayHtml(p.first_name));
-    if (result.ok) {
+  const targets = people.filter(p => {
+    if (alreadySent.has(String(p.id))) { skipped++; return false; }
+    return true;
+  });
+  const results = await Promise.all(targets.map(p =>
+    sendResend(env, p.email, `Happy Birthday, ${p.first_name}!`,
+      birthdayText(p.first_name), birthdayHtml(p.first_name))
+      .then(r => ({ p, r }))));
+  const auditStmts = [];
+  for (const { p, r } of results) {
+    if (r.ok) {
       sent++;
-      await db.prepare(
+      auditStmts.push(db.prepare(
         `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,new_value) VALUES(?,?,?,?,?,?)`
-      ).bind('birthday_email_sent', 'person', p.id, `${p.first_name} ${p.last_name}`.trim(), 'email', p.email).run();
-    } else {
-      errors.push(`${p.first_name} ${p.last_name}: ${result.error}`);
-    }
+      ).bind('birthday_email_sent', 'person', p.id, `${p.first_name} ${p.last_name}`.trim(), 'email', p.email));
+    } else errors.push(`${p.first_name} ${p.last_name}: ${r.error}`);
   }
+  if (auditStmts.length) await db.batch(auditStmts);
   return { sent, skipped, errors, total: people.length };
 }
 
@@ -288,7 +333,7 @@ export async function sendBirthdayEmails(env) {
 
 export async function sendAnniversaryEmails(env) {
   const db = env.DB;
-  const todayMMDD = new Date().toISOString().slice(5, 10); // "MM-DD"
+  const todayMMDD = centralTodayMMDD();
 
   // Dedup keyed by household_id (couples) or person_id (solo)
   const alreadySent = new Set(
@@ -322,71 +367,89 @@ export async function sendAnniversaryEmails(env) {
   let sent = 0, skipped = 0;
   const errors = [];
 
+  // Flatten into independent send tasks so we can fire them in parallel,
+  // then attribute results back to their household for audit logging.
+  const sends = []; // { kind: 'shared'|'split'|'solo', hhKey, p1, p2, person, partner, to, subject, text, html, errLabel }
+  const hhInfo = new Map(); // hhKey -> { p1, p2, members } for audit log composition
+
   for (const members of hhMap.values()) {
     const p1 = members[0];
     const dedupeKey = String(p1.household_id || p1.id);
     if (alreadySent.has(dedupeKey)) { skipped++; continue; }
+    const hhKey = p1.household_id || p1.id;
 
     if (members.length >= 2) {
       const p2 = members[1];
+      hhInfo.set(String(hhKey), { p1, p2, members });
       const sharedEmail = p1.email && p2.email && p1.email === p2.email;
-      const hhKey = p1.household_id || p1.id;
       if (sharedEmail) {
-        // One email addressed to both
-        const result = await sendResend(env, p1.email,
-          `Happy Anniversary, ${p1.first_name} and ${p2.first_name}!`,
-          anniversaryText(p1.first_name, p2.first_name),
-          anniversaryHtml(p1.first_name, p2.first_name));
-        if (result.ok) {
-          sent++;
-          await db.prepare(
-            `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,new_value) VALUES(?,?,?,?,?,?)`
-          ).bind('anniversary_email_sent', 'household', hhKey,
-            `${p1.first_name} & ${p2.first_name}`, 'email', p1.email).run();
-        } else {
-          errors.push(`${p1.first_name} & ${p2.first_name}: ${result.error}`);
-        }
+        sends.push({
+          kind: 'shared', hhKey, p1, p2,
+          to: p1.email, subject: `Happy Anniversary, ${p1.first_name} and ${p2.first_name}!`,
+          text: anniversaryText(p1.first_name, p2.first_name),
+          html: anniversaryHtml(p1.first_name, p2.first_name),
+          errLabel: `${p1.first_name} & ${p2.first_name}`,
+        });
       } else {
-        // Separate emails — send to each who has an address
-        let atLeastOneSent = false;
         for (const [person, partner] of [[p1, p2], [p2, p1]]) {
           if (!person.email) continue;
-          const result = await sendResend(env, person.email,
-            `Happy Anniversary, ${person.first_name}!`,
-            anniversaryText(person.first_name, partner.first_name),
-            anniversaryHtml(person.first_name, partner.first_name));
-          if (result.ok) {
-            sent++;
-            atLeastOneSent = true;
-          } else {
-            errors.push(`${person.first_name}: ${result.error}`);
-          }
-        }
-        // Log once for the household as long as at least one email succeeded
-        if (atLeastOneSent) {
-          await db.prepare(
-            `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,new_value) VALUES(?,?,?,?,?,?)`
-          ).bind('anniversary_email_sent', 'household', hhKey,
-            `${p1.first_name} & ${p2.first_name}`, 'email', [p1.email, p2.email].filter(Boolean).join(', ')).run();
+          sends.push({
+            kind: 'split', hhKey, p1, p2, person, partner,
+            to: person.email, subject: `Happy Anniversary, ${person.first_name}!`,
+            text: anniversaryText(person.first_name, partner.first_name),
+            html: anniversaryHtml(person.first_name, partner.first_name),
+            errLabel: person.first_name,
+          });
         }
       }
     } else {
-      // Solo person with anniversary set
       if (!p1.email) continue;
-      const result = await sendResend(env, p1.email,
-        `Happy Anniversary, ${p1.first_name}!`,
-        anniversaryText(p1.first_name, null),
-        anniversaryHtml(p1.first_name, null));
-      if (result.ok) {
-        sent++;
-        await db.prepare(
-          `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,new_value) VALUES(?,?,?,?,?,?)`
-        ).bind('anniversary_email_sent', 'person', p1.id,
-          `${p1.first_name} ${p1.last_name}`.trim(), 'email', p1.email).run();
-      } else {
-        errors.push(`${p1.first_name}: ${result.error}`);
-      }
+      hhInfo.set(String(hhKey), { p1, p2: null, members });
+      sends.push({
+        kind: 'solo', hhKey, p1,
+        to: p1.email, subject: `Happy Anniversary, ${p1.first_name}!`,
+        text: anniversaryText(p1.first_name, null),
+        html: anniversaryHtml(p1.first_name, null),
+        errLabel: p1.first_name,
+      });
     }
   }
+
+  const results = await Promise.all(sends.map(s =>
+    sendResend(env, s.to, s.subject, s.text, s.html).then(r => ({ s, r }))));
+
+  // Track which households had at least one successful send.
+  const householdOk = new Set();
+  for (const { s, r } of results) {
+    if (r.ok) { sent++; householdOk.add(String(s.hhKey) + ':' + s.kind + ':' + (s.person?.id || '')); }
+    else errors.push(`${s.errLabel}: ${r.error}`);
+  }
+
+  // Compose one audit-log row per household that succeeded.
+  const auditStmts = [];
+  const audited = new Set();
+  for (const { s, r } of results) {
+    if (!r.ok) continue;
+    const key = String(s.hhKey);
+    if (audited.has(key)) continue;
+    audited.add(key);
+    if (s.kind === 'solo') {
+      const p1 = s.p1;
+      auditStmts.push(db.prepare(
+        `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,new_value) VALUES(?,?,?,?,?,?)`
+      ).bind('anniversary_email_sent', 'person', p1.id,
+        `${p1.first_name} ${p1.last_name}`.trim(), 'email', p1.email));
+    } else {
+      const info = hhInfo.get(key);
+      const p1 = info.p1, p2 = info.p2;
+      const emails = s.kind === 'shared' ? p1.email : [p1.email, p2.email].filter(Boolean).join(', ');
+      auditStmts.push(db.prepare(
+        `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,new_value) VALUES(?,?,?,?,?,?)`
+      ).bind('anniversary_email_sent', 'household', s.hhKey,
+        `${p1.first_name} & ${p2.first_name}`, 'email', emails));
+    }
+  }
+  if (auditStmts.length) await db.batch(auditStmts);
   return { sent, skipped, errors, total: rows.length };
 }
+

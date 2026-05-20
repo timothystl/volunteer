@@ -119,6 +119,10 @@ a{color:var(--sky-steel);}
 .btn-secondary:hover{background:var(--blue-mist);}
 .btn-danger{padding:7px 14px;background:none;color:var(--danger);border:1.5px solid var(--danger);border-radius:7px;font-family:var(--font-body);font-size:.85rem;font-weight:600;cursor:pointer;}
 .btn-danger:hover{background:#fdf0ec;}
+/* Larger touch targets on small screens (WCAG 2.5.5: 44px minimum). */
+@media(max-width:600px){
+  .btn-primary,.btn-secondary,.btn-danger{padding-top:11px;padding-bottom:11px;min-height:44px;}
+}
 /* ── PERSON CARDS ── */
 .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
 .p-card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 10px rgba(30,45,74,.06);cursor:pointer;overflow:hidden;transition:box-shadow .15s;}
@@ -267,6 +271,7 @@ a{color:var(--sky-steel);}
 .modal-overlay{position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:16px;}
 .modal-overlay.open{display:flex;}
 .modal{background:var(--white);border-radius:14px;padding:28px 26px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 6px 32px rgba(0,0,0,.15);}
+@media(max-width:480px){.modal{padding:18px 16px;max-height:95vh;border-radius:10px;}}
 .modal h2{font-family:var(--font-head);font-size:1.1rem;color:var(--steel-anchor);margin-bottom:18px;}
 .modal-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 @media(max-width:480px){.modal-2col{grid-template-columns:1fr;}}

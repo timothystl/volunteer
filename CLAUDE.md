@@ -323,6 +323,66 @@ Use this as the session-to-session roadmap. Complete one phase fully before star
 
 ---
 
+### Phase 14 — Cron correctness & email safety ✅ DONE 2026-05-20
+**Goal:** Make daily cron paths correct under all timezones and resilient to scale.
+
+- [x] **BG1** — `tlc-volunteer-worker.js:86` Saturday check used `getUTCDay()`. Now uses `centralDayOfWeek()` (Intl + America/Chicago) so push reminders fire on Central Saturday regardless of UTC offset. Done 2026-05-20 (v224).
+- [x] **BG2** — Birthday/anniversary MM-DD query was UTC-based. Now uses `centralTodayMMDD()`. Fixes edge-of-day misses when run outside the cron window (e.g. admin test buttons). Done 2026-05-20 (v224).
+- [x] **BG3** — `birthdayHtml()` / `anniversaryHtml()` now escape names before embedding (defense-in-depth). Done 2026-05-20 (v224).
+- [x] **PR1** — Birthday/anniversary email + SMS loops batched with `Promise.all`; audit log writes collected into a single `db.batch()`. Replaces serial awaits that risked the 30s Worker timeout on large recipient lists. Done 2026-05-20 (v224).
+
+**Done when:** All four resolved; tests pass.
+
+---
+
+### Phase 15 — Intake & upload hardening ✅ DONE 2026-05-20
+**Goal:** Close remaining input-validation gaps on unauthenticated/lightly-authenticated endpoints.
+
+- [x] **SC1** — `api-intake.js` now rate-limits per IP (10/15 min) via `RSVP_STORE` for both `/api/intake/connect-card` and `/api/intake/prayer`. 20 KB max body. Done 2026-05-20 (v224).
+- [x] **SC2** — `api-people.js` photo uploads (person + household) now validate via magic-byte sniffing and enforce 8 MB cap. New `validateImageUpload()` helper. Done 2026-05-20 (v224).
+- [x] **SC3** — Giving CSV import enforces 10 MB cap via Content-Length and post-read size check. Done 2026-05-20 (v224).
+- [x] **SC4** — `GET /admin/api/config/church` now omits `church_ein` for non-admins (was previously exposed to staff/finance). Done 2026-05-20 (v224).
+- [x] **BG4** — Closed; reviewed agent's claim about hardcoded Breeze pagination `offset=50`. The first call uses `limit=50&offset=0`, so the second-page fetch at `offset=50` is correct cursor pagination, not a skip. No change. (2026-05-20)
+
+**Done when:** All four hardenings shipped; intake key + photo upload smoke-tested.
+
+---
+
+### Phase 16 — Performance follow-ups ✅ DONE 2026-05-20
+**Goal:** Eliminate the remaining N+1 patterns and add the missing giving index.
+
+- [x] **PR2 / FH4** — New `POST /admin/api/people/bulk-tags` endpoint (`{ ids, add, remove }`) writes via `db.batch()`. Frontend `applyBulkTags()` is now a single round-trip instead of 2N. Closes FH4 from Phase 12. Done 2026-05-20 (v224).
+- [x] **PR4** — Added `idx_giving_breeze` on `giving_entries(breeze_id)` (migration `0007_giving_breeze_index.sql` + `db.js` runtime migration). Speeds up sync dedup, orphan cleanup, and reconcile-diagnose. Done 2026-05-20 (v224).
+- [x] **PR3** — Closed as intentional. The pre-sync caches (`SELECT breeze_id FROM giving_entries WHERE breeze_id != ''` and similar for people) need full results to correctly dedup. Capacity is small enough (~50k rows max) that a LIMIT would risk skipping matches. (2026-05-20)
+
+**Done when:** Bulk tag apply confirmed single request; index appears after deploy.
+
+---
+
+### Phase 17 — Mobile readiness ✅ DONE 2026-05-20
+**Goal:** Make charts, tables, modals, and buttons usable on phones.
+
+- [x] **MO1** — Chart resize handles in `js-attendance.js` now register `touchstart/move/end/cancel` alongside mouse events. Handle height bumped to 14px; `touch-action:none` added. Both `attChartResizeStart` and `_rptResizeStart` updated. Done 2026-05-20 (v224).
+- [x] **MO2** — Register table now wrapped in `<div style="overflow-x:auto">` so the nowrap date column scrolls instead of overflowing. Done 2026-05-20 (v224).
+- [x] **MO3** — `.btn-primary/secondary/danger` get 11px vertical padding + 44px min-height under `@media(max-width:600px)`, hitting WCAG 2.5.5 touch-target minimum. Done 2026-05-20 (v224).
+- [x] **MO4** — `.modal` padding reduced to 18/16 and `max-height:95vh` under `@media(max-width:480px)` so modals fit in landscape phones. Done 2026-05-20 (v224).
+- [x] **MO5** — Deferred. Sidebar `.s-item` SVGs have visible text labels alongside, so missing `aria-label` is not blocking screen-reader users. Will revisit alongside a dedicated a11y pass. (2026-05-20)
+
+**Done when:** Chart resizing works on touch, register table scrolls, button taps reliable.
+
+---
+
+### Phase 18 — Hygiene ✅ DONE 2026-05-20
+**Goal:** Reduce duplication in scheduler code without expanding scope.
+
+- [x] **HG2** — Service-time + RSVP-status ternaries in `api-scheduler.js` (lines 385/390/441) deduplicated into `formatServiceTime()` and `formatRsvpStatus()` helpers at top of file. Done 2026-05-20 (v224).
+- [x] **HG3** — `office@timothystl.org` literals at scheduler lines 126/581 now route through new `officeEmail(env)` helper that respects `REPLY_TO_EMAIL`. Signature footer + ICS ORGANIZER intentionally left as static strings (church-identity, not technical reply-to). Done 2026-05-20 (v224).
+- [x] **HG1/HG4/HG5** — Closed. HG1 (entries SELECT in `api-giving.js`) used twice — extracting to a constant adds indirection for marginal gain. HG4 (long inline ternary returns) is locally readable and the extraction would just add another file boundary. HG5 (error message wording) is cosmetic; leaving as-is. (2026-05-20)
+
+**Done when:** Scheduler helpers in place; no behavior change.
+
+---
+
 ## Queued Items (add new ones here during sessions)
 
 <!-- Add items here as they come up. Format: - [ ] Description (noted YYYY-MM-DD) -->

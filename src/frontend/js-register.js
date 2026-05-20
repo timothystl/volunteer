@@ -133,9 +133,11 @@ function renderRegisterList(entries) {
     }).join('');
     var famHeader = hasExtended ? 'Family' : esc(lbl.col2);
     html += '<div class="reg-year-hdr">'+yr+' <span style="font-weight:400;color:var(--faint);">('+grp.length+')</span></div>'
-      + '<table class="reg-table" style="margin-top:8px;">'
+      + '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:8px;">'
+      + '<table class="reg-table">'
       + '<thead><tr><th>Date</th><th>'+esc(lbl.nameLbl)+'</th><th>'+famHeader+'</th><th>Officiant</th><th></th></tr></thead>'
-      + '<tbody>'+rows+'</tbody></table>';
+      + '<tbody>'+rows+'</tbody></table>'
+      + '</div>';
   });
   el.innerHTML = html;
 }

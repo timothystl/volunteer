@@ -309,21 +309,13 @@ function applyBulkTags() {
     document.getElementById('p-bulk-tags-panel').style.display = 'none'; return;
   }
   var ids = Array.from(_selectedPeople);
-  var done = 0;
-  ids.forEach(function(personId) {
-    // Fetch current tags, then add/remove
-    api('/admin/api/people/' + personId).then(function(p) {
-      var curTagIds = (p.tags || []).map(function(t){return t.id;});
-      var newTagIds = curTagIds.filter(function(id){return removes.indexOf(id)<0;});
-      adds.forEach(function(id){ if (newTagIds.indexOf(id)<0) newTagIds.push(id); });
-      return api('/admin/api/people/' + personId, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tag_ids:newTagIds})});
-    }).then(function() {
-      done++;
-      if (done === ids.length) {
-        document.getElementById('p-bulk-tags-panel').style.display = 'none';
-        clearSelection(); loadPeople();
-      }
-    });
+  api('/admin/api/people/bulk-tags', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: ids, add: adds, remove: removes })
+  }).then(function() {
+    document.getElementById('p-bulk-tags-panel').style.display = 'none';
+    clearSelection(); loadPeople();
   });
 }
 function renderPeopleMobile(people) {
