@@ -116,7 +116,9 @@ export async function handleChmsApi(req, env, url, method, seg, role = 'admin') 
     const dashMonthStr = String(dashMonth).padStart(2, '0');
     const birthdays = (await db.prepare(
       `SELECT id, first_name, last_name, dob FROM people
-       WHERE active=1 AND (status IS NULL OR status='active') AND dob != ''
+       WHERE active=1 AND (status IS NULL OR status='active')
+         AND (deceased=0 OR deceased IS NULL)
+         AND dob != ''
          AND LOWER(member_type) = 'member'
          AND strftime('%m', dob) = ?
        ORDER BY strftime('%d', dob)`
@@ -126,12 +128,12 @@ export async function handleChmsApi(req, env, url, method, seg, role = 'admin') 
       `SELECT id, first_name, last_name, anniversary_date, family_role, household_id FROM people
        WHERE active=1 AND (status IS NULL OR status='active')
          AND (deceased=0 OR deceased IS NULL) AND anniversary_date != ''
-         AND LOWER(member_type) NOT IN ('visitor','inactive','other','organization')
+         AND LOWER(member_type) = 'member'
          AND strftime('%m', anniversary_date) = ?
          AND NOT EXISTS (
            SELECT 1 FROM people p2
            WHERE p2.household_id=people.household_id AND p2.id!=people.id
-             AND (p2.deceased=1 OR p2.status='deceased') AND p2.family_role IN ('head','spouse')
+             AND (p2.deceased=1 OR p2.status='deceased')
          )
        ORDER BY strftime('%d', anniversary_date), household_id,
          CASE family_role WHEN 'head' THEN 0 WHEN 'spouse' THEN 1 ELSE 2 END`
