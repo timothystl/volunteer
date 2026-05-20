@@ -619,6 +619,7 @@ function renderAttendanceList(services, totalInDb) {
         + '<div style="display:flex;gap:8px;">'
         + '<button class="btn-primary" style="font-size:.82rem;padding:5px 14px;" onclick="saveInlineSingle(['+rows.map(function(s){return s.id;}).join(',')+'],&#39;'+dk+'&#39;)">Save</button>'
         + '<button class="btn-secondary" style="font-size:.82rem;padding:5px 14px;" onclick="toggleAttEdit(&#39;'+dk+'&#39;)">Cancel</button>'
+        + '<button class="btn-danger" style="font-size:.82rem;padding:5px 12px;margin-left:auto;" onclick="deleteAttDate(&#39;'+dk+'&#39;,['+rows.map(function(s){return s.id;}).join(',')+'])">Delete</button>'
         + '</div>';
     }
     html += '</div></div>'; // end form + group

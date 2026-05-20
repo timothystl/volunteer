@@ -87,7 +87,7 @@ function renderUsersList() {
           + '<td style="padding:8px 8px;">'+statusBadge+'</td>'
           + '<td style="padding:8px 8px;text-align:right;white-space:nowrap;">'
           + '<button class="btn-secondary" style="font-size:.75rem;padding:3px 8px;" onclick="openUserForm('+u.id+')">Edit</button>'
-          + ' <button class="btn-danger" style="font-size:.75rem;padding:3px 8px;" onclick="deleteUser('+u.id+',\''+esc(u.username)+'\')">Delete</button>'
+          + ' <button class="btn-danger" style="font-size:.75rem;padding:3px 8px;" onclick="deleteUser('+u.id+')">Delete</button>'
           + '</td></tr>';
       }).join('')
     + '</tbody></table>';
@@ -131,7 +131,9 @@ function saveUser() {
       else alert('Error: '+(r.error||'unknown'));
     });
 }
-function deleteUser(uid, username) {
+function deleteUser(uid) {
+  var u = (_usersData||[]).find(function(x){return x.id===uid;});
+  var username = u ? u.username : 'this user';
   if (!confirm('Delete user "'+username+'"? This cannot be undone.')) return;
   api('/admin/api/users/'+uid, {method:'DELETE'}).then(function(r){
     if (r.ok) loadUsers(); else alert('Error: '+(r.error||'unknown'));

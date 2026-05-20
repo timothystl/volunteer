@@ -81,7 +81,7 @@ async function sendResend(env, to, subject, text, htmlBody) {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to, subject, text, html: htmlBody, reply_to: 'office@timothystl.org' }),
+      body: JSON.stringify({ from, to, subject, text, html: htmlBody, reply_to: env.REPLY_TO_EMAIL || 'office@timothystl.org' }),
     });
     const data = await res.json().catch(() => ({}));
     return res.ok ? { ok: true, id: data.id } : { ok: false, error: data.message || String(res.status) };

@@ -14,14 +14,12 @@ function goToBatch(batchId) {
   showTab('giving');
 }
 function loadBatches() {
+  var pendingId = _pendingOpenBatchId;
+  _pendingOpenBatchId = null;
   api('/admin/api/giving/batches?status=' + _batchFilter).then(function(d) {
     _lastBatches = d.batches || [];
     renderBatchList(_lastBatches);
-    if (_pendingOpenBatchId) {
-      var bid = _pendingOpenBatchId;
-      _pendingOpenBatchId = null;
-      openBatch(bid);
-    }
+    if (pendingId) openBatch(pendingId);
   });
 }
 function filterBatchSearch(val) {
