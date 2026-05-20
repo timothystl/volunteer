@@ -500,22 +500,25 @@ if (archiveMatch && method === 'POST') {
 
   if (action === 'archive') {
     await db.prepare(`UPDATE people SET status='archived', active=0 WHERE id=?`).bind(pid).run();
+    const personName = [person.first_name, person.last_name].filter(Boolean).join(' ');
     await db.prepare(`INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,old_value,new_value)
       VALUES('update','person',?,?,?,'active','archived')`
-    ).bind(pid, `${person.first_name} ${person.last_name}`, 'status').run();
+    ).bind(pid, personName, 'status').run();
   } else if (action === 'unarchive') {
     await db.prepare(`UPDATE people SET status='active', active=1, deceased=0 WHERE id=?`).bind(pid).run();
+    const personName = [person.first_name, person.last_name].filter(Boolean).join(' ');
     await db.prepare(`INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,old_value,new_value)
       VALUES('update','person',?,?,?,'archived','active')`
-    ).bind(pid, `${person.first_name} ${person.last_name}`, 'status').run();
+    ).bind(pid, personName, 'status').run();
   } else if (action === 'deceased') {
     if (!isAdmin && !isStaff) return json({ error: 'Access denied' }, 403);
     const today = new Date().toISOString().slice(0, 10);
     await db.prepare(`UPDATE people SET status='deceased', deceased=1, death_date=?, active=0 WHERE id=?`)
       .bind(today, pid).run();
+    const personName = [person.first_name, person.last_name].filter(Boolean).join(' ');
     await db.prepare(`INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,old_value,new_value)
       VALUES('update','person',?,?,?,'active','deceased')`
-    ).bind(pid, `${person.first_name} ${person.last_name}`, 'status').run();
+    ).bind(pid, personName, 'status').run();
     // If this person was the household head, promote spouse or first remaining active member
     if (person.household_id && person.family_role === 'head') {
       const members = (await db.prepare(
@@ -707,6 +710,7 @@ if (seg.startsWith('households') || seg.startsWith('organizations') ||
 
 // ── Follow-up items ─────────────────────────────────────────────
 if (seg === 'followup' && method === 'GET') {
+  if (!isStaff) return json({ error: 'Access denied' }, 403);
   const completed = url.searchParams.get('completed') === '1' ? 1 : 0;
   const personId = url.searchParams.get('person_id');
   let rows;
@@ -753,6 +757,7 @@ if (fmatch) {
 }
 // Audit log
 if (seg === 'audit' && method === 'GET') {
+  if (!isStaff) return json({ error: 'Access denied' }, 403);
   const entityId = url.searchParams.get('entity_id');
   const entityType = url.searchParams.get('entity_type') || 'person';
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
@@ -771,6 +776,7 @@ if (seg === 'audit' && method === 'GET') {
 if (seg === 'audit/undo' && method === 'POST') {
   if (!isAdmin) return json({ error: 'Access denied' }, 403);
   let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  if (!Number.isInteger(b.id)) return json({ error: 'Invalid id' }, 400);
   const entry = await db.prepare('SELECT * FROM audit_log WHERE id=?').bind(b.id).first();
   if (!entry) return json({ error: 'Audit entry not found' }, 404);
   if (entry.entity_type !== 'person') return json({ error: 'Only person edits can be undone' }, 400);

@@ -427,8 +427,8 @@ if (regDelMatch && method === 'DELETE') {
 }
 if (seg === 'register/clear' && method === 'POST') {
   let b = {}; try { b = await req.json(); } catch {}
-  const validTypes = ['baptism','confirmation','wedding'];
-  if (!validTypes.includes(b.type)) return json({ error: 'type must be baptism, confirmation, or wedding' }, 400);
+  const validTypes = ['baptism','confirmation','wedding','funeral','anniversary'];
+  if (!validTypes.includes(b.type)) return json({ error: 'type must be baptism, confirmation, wedding, funeral, or anniversary' }, 400);
   const r = await db.prepare('DELETE FROM church_register WHERE type=?').bind(b.type).run();
   return json({ ok: true, deleted: r.meta?.changes ?? 0 });
 }
@@ -670,7 +670,7 @@ if (seg === 'import/giving-csv' && method === 'POST') { try {
     let cur = [], field = '', inQ = false;
     for (let i = 0; i < text.length; i++) {
       const c = text[i];
-      if (c === '"') { inQ = !inQ; continue; }
+      if (c === '"') { if (inQ && text[i+1] === '"') { field += '"'; i++; } else { inQ = !inQ; } continue; }
       if (inQ) { field += c; continue; }
       if (c === ',') { cur.push(field.trim()); field = ''; continue; }
       if (c === '\n' || (c === '\r' && text[i+1] === '\n')) {
@@ -1758,7 +1758,7 @@ if (seg === 'import/breeze-giving' && method === 'POST') { try {
      FROM giving_entries ge
      JOIN funds f ON f.id = ge.fund_id
      WHERE f.name LIKE 'Breeze Fund %'
-     ORDER BY ge.contribution_date DESC`
+     ORDER BY ge.contribution_date DESC LIMIT 50`
   ).all()).results || [];
 
   return json({ ok: true, imported, lateImported, corrected, orphansRemoved, skipped, skippedDateFilter, lateEntries, ghostFundContribs, dupesRemoved, fundsRenamed, fundsMade, batchesMade, breezeFundsFound: Object.keys(breezeFundNames).length, givingListFundHarvest, givingListFiltered, seenIdsCount: seenIds.size, errors: errors.slice(0, 20), total: allEntries.length, from_log: entries.length, date_range: { start, end }, lateGraceDays: 45, diagnostics: diag });

@@ -248,7 +248,7 @@ async function validateCensus(addr) {
     address2: addr.address2 || '',
     city: c.city || addr.city || '', state: c.state || addr.state || '',
     zip: c.zip || addr.zip || '', zip4: '',
-    dpvConfirmation: 'Y', deliverable: true, deliverability: 'deliverable',
+    dpvConfirmation: 'Y', deliverable: true, deliverability: 'deliverable', source: 'census',
   };
 }
 

@@ -835,7 +835,7 @@ function importGivingCSV(file) {
         headers: {'Content-Type': 'text/csv'},
         body: header + '\n' + chunks[idx].join('\n')
       }).then(function(d) {
-        if (d.error) { status.textContent = 'Error on chunk ' + idx + ': ' + d.error; status.className = 'import-status err'; return; }
+        if (d.error) { status.textContent = 'Error on chunk ' + (idx+1) + ' of ' + chunks.length + ' (after ' + (idx * chunkSize) + ' rows): ' + d.error; status.className = 'import-status err'; return; }
         totImported += d.imported   || 0;
         totSkipped  += d.skipped    || 0;
         totBatches  += d.batchesMade|| 0;

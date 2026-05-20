@@ -152,6 +152,9 @@ export async function handleAdminLogin(req, env) {
   }
 
   // ── 2. Fall back to ADMIN_PASSWORD env-var (break-glass / initial setup) ──
+  // This path bypasses the app_users table entirely. If a DB user named "admin" is
+  // deactivated, this env-var credential still grants full admin access. It exists
+  // only for initial setup and locked-out recovery — rotate it after first DB user is created.
   if (!matchedRole && submittedUser === 'admin' && submittedPass === adminPassword) {
     matchedRole = 'admin';
   }

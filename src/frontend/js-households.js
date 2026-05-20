@@ -410,7 +410,7 @@ function createHouseholdFromPerson() {
   if (!name || !name.trim()) return;
   name = name.trim();
   document.getElementById('pm-hh-ac').classList.remove('open');
-  api('/admin/api/households', { method: 'POST', body: JSON.stringify({ name: name }) }).then(function(d) {
+  api('/admin/api/households', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name }) }).then(function(d) {
     if (d && d.id) {
       selectHousehold(d.id, name);
     } else {

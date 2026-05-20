@@ -589,7 +589,7 @@ function renderDashboard(d) {
         var ini = ((p.first_name||'').charAt(0)+(p.last_name||'').charAt(0)).toUpperCase();
         var bg = pvColors[p.id % pvColors.length];
         var parts = (p.dob||'').split('-');
-        var dateStr = parts.length >= 3 ? mnShort[parseInt(parts[1])-1]+' '+parseInt(parts[2]) : p.dob;
+        var dateStr = parts.length >= 3 ? mnShort[parseInt(parts[1])-1]+' '+parseInt(parts[2]) : esc(p.dob||'');
         return '<div class="dash-bday" onclick="openPersonDetail('+p.id+')" style="cursor:pointer;">'
           + '<div class="dash-avatar" style="background:'+bg+';">'+ini+'</div>'
           + '<div style="flex:1;"><div class="dash-item-name">'+esc(name)+'</div></div>'

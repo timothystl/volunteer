@@ -298,26 +298,26 @@ Use this as the session-to-session roadmap. Complete one phase fully before star
 
 ---
 
-### Phase 13 — Low-Priority Polish & Robustness
+### Phase 13 — Low-Priority Polish & Robustness ✅ DONE 2026-05-20
 **Goal:** Minor correctness gaps, dead code, hardcoded values, and defense-in-depth improvements. Low risk; no urgency.
 
-- [ ] **LP1** — `api-people.js` lines ~490, 495, 502 — archive audit log builds person name as `"${first} ${last}"` which produces `"null Smith"` if either field is null. Fix: `[person.first_name, person.last_name].filter(Boolean).join(' ')`. (`api-people.js`)
-- [ ] **LP2** — `api-people.js` line ~758 — audit undo `b.id` is not validated as an integer; a non-numeric value returns 404 instead of 400. Fix: `if (!Number.isInteger(b.id)) return json({ error: 'Invalid id' }, 400)`. (`api-people.js`)
-- [ ] **LP3** — `api-emails.js` line ~84 — `reply_to` address is hardcoded as `office@timothystl.org` in `sendResend`. Move to `env.REPLY_TO_EMAIL` or a `chms_config` key so it can change without a deploy. (`api-emails.js`)
-- [ ] **LP4** — `api-import.js` line ~413 — `register/clear` only accepts `baptism|confirmation|wedding`; `funeral` and `anniversary` type entries can never be cleared. Add those types to the allowlist or document the intentional restriction. (`api-import.js`)
-- [ ] **LP5** — `api-import.js` lines ~654–670 — CSV parser does not handle `""` escaped double-quotes per RFC 4180; Breeze notes fields with embedded quotes would be mangled. Fix: when inside a quoted field and the next char is also `"`, consume both as one literal quote. (`api-import.js`)
-- [ ] **LP6** — `api-import.js` line ~1747 — `ghostFundContribs` diagnostic runs a full `giving_entries` table scan after every sync even when there are no placeholder funds. Add `LIMIT 50` to bound the scan. (`api-import.js`)
-- [ ] **LP7** — `api-utils.js` line ~251 — Census geocoder fallback returns `deliverable: true` for any geocoded address even though it does no delivery-point validation (DPV). Add `source: 'census'` to the response so callers can show a caveat. (`api-utils.js`)
-- [ ] **LP8** — `api-admin.js` line ~155 — break-glass `env.ADMIN_PASSWORD` still works if a DB user named `"admin"` is deactivated; interaction is undocumented. Add a comment clarifying the behavior. (`api-admin.js`)
-- [ ] **LP9** — `api-people.js` lines ~694, 740 — `GET /followup` and `GET /audit` have no inner role guards; they rely solely on the outer ACL in `api-chms.js`. Add `if (!isStaff)` guards for defense-in-depth, matching the pattern used elsewhere. (`api-people.js`)
-- [ ] **LP10** — `js-settings.js` line ~135 — `deleteUser` receives username as a JS string arg through the onclick; a username containing a backslash or crafted content could mislead the `confirm()` dialog. Fix: look up the username from `_usersData[id]` inside `deleteUser` instead of accepting it as a string argument. (`src/frontend/js-settings.js`)
-- [ ] **LP11** — `js-giving.js` line ~20 — `_pendingOpenBatchId` is not cleared on API error; on the next successful `loadBatches` call it opens a stale batch ID. Fix: clear it before the `api()` call or in a `.catch`. (`src/frontend/js-giving.js`)
-- [ ] **LP12** — `js-households.js` line ~410 — `createHouseholdFromPerson` POST is missing the `Content-Type: application/json` header. Add `headers: { 'Content-Type': 'application/json' }` consistent with every other POST in the codebase. (`src/frontend/js-households.js`)
-- [ ] **LP13** — `js-dashboard.js` lines ~591, 595 — `dateStr` fallback puts `p.dob` directly in `innerHTML` when the date format is unexpected. Fix: `esc(p.dob || '')`. (`src/frontend/js-dashboard.js`)
-- [ ] **LP14** — `js-volunteers.js` lines ~653–656 — stray `</script></body></html>` at the end of the template string. Remove; it is dead markup inside the assembled SPA. (`src/frontend/js-volunteers.js`)
-- [ ] **LP15** — `js-core.js` lines ~58–65 and ~173–176 — `openPersonDetail` and `goToProfile` are near-duplicates. Make `openPersonDetail` a thin wrapper around `goToProfile`. (`src/frontend/js-core.js`)
-- [ ] **LP16** — `js-export-import.js` line ~834 — chunk import error halts without reporting how many rows were processed before the failure. Update the status message to: `"Imported X of Y rows before error on chunk N."` (`src/frontend/js-export-import.js`)
-- [ ] **LP17** — `js-attendance.js` — non-Sunday inline edit row has no delete button and no notes field, even though the form exists for special/midweek services that may need deletion. Add delete button to the non-Sunday edit path. (`src/frontend/js-attendance.js`)
+- [x] **LP1** — Archive audit log null name. Done 2026-05-20 (v221). `[person.first_name, person.last_name].filter(Boolean).join(' ')` for all three archive/unarchive/deceased paths. (`api-people.js`)
+- [x] **LP2** — Audit undo integer validation. Done 2026-05-20 (v221). Added `if (!Number.isInteger(b.id)) return json({ error: 'Invalid id' }, 400)` before the DB lookup. (`api-people.js`)
+- [x] **LP3** — `reply_to` hardcoded. Done 2026-05-20 (v221). Changed to `env.REPLY_TO_EMAIL || 'office@timothystl.org'`. (`api-emails.js`)
+- [x] **LP4** — `register/clear` allowlist. Done 2026-05-20 (v221). Added `'funeral'` and `'anniversary'` to `validTypes`. (`api-import.js`)
+- [x] **LP5** — CSV `""` double-quote handling. Done 2026-05-20 (v221). When inside a quoted field and next char is also `"`, consume both as one literal `"` per RFC 4180. (`api-import.js`)
+- [x] **LP6** — `ghostFundContribs` LIMIT. Done 2026-05-20 (v221). Added `LIMIT 50` to the ghost-fund scan query. (`api-import.js`)
+- [x] **LP7** — Census geocoder `source`. Done 2026-05-20 (v221). Added `source: 'census'` to the Census geocoder response. (`api-utils.js`)
+- [x] **LP8** — Break-glass comment. Done 2026-05-20 (v221). Added comment explaining env-var bypass behavior and deactivated-admin interaction. (`api-admin.js`)
+- [x] **LP9** — `GET /followup` and `GET /audit` role guards. Done 2026-05-20 (v221). Added `if (!isStaff) return json({ error: 'Access denied' }, 403)` to both. (`api-people.js`)
+- [x] **LP10** — `deleteUser` username injection. Done 2026-05-20 (v221). Signature changed to `deleteUser(uid)`; username looked up from `_usersData` inside the function. (`src/frontend/js-settings.js`)
+- [x] **LP11** — `_pendingOpenBatchId` stale on error. Done 2026-05-20 (v221). Captured and cleared `pendingId` before the API call so an error never leaves it set. (`src/frontend/js-giving.js`)
+- [x] **LP12** — `createHouseholdFromPerson` missing Content-Type. Done 2026-05-20 (v221). Added `headers: {'Content-Type':'application/json'}`. (`src/frontend/js-households.js`)
+- [x] **LP13** — `dateStr` raw `p.dob` in innerHTML. Done 2026-05-20 (v221). Fallback is now `esc(p.dob||'')`. (`src/frontend/js-dashboard.js`)
+- [x] **LP14** — Stray `</script></body></html>` in volunteers template. Done 2026-05-20 (v221). Removed dead closing tags. (`src/frontend/js-volunteers.js`)
+- [x] **LP15** — `openPersonDetail`/`goToProfile` duplication. Done 2026-05-20 (v221). `goToProfile` is now a thin wrapper: `showTab('people'); openPersonDetail(id)`. (`src/frontend/js-core.js`)
+- [x] **LP16** — Chunk import error message. Done 2026-05-20 (v221). Message now: `"Error on chunk N of M (after X rows): <error>"`. (`src/frontend/js-export-import.js`)
+- [x] **LP17** — Non-Sunday edit row delete button. Done 2026-05-20 (v221). Added Delete button matching the Sunday path pattern. (`src/frontend/js-attendance.js`)
 
 **Done when:** All items resolved; each either fixed or formally documented as intentional with a reason.
 
