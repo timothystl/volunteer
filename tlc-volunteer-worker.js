@@ -22,7 +22,7 @@ import { CHMS_HTML, CHMS_MANIFEST_JSON, SW_JS, BACKLOG_HTML } from './src/html-c
 import { PORTAL_HTML, PORTAL_MANIFEST_JSON } from './src/portal-html.js';
 import { PORTAL_SW_JS } from './src/portal-sw-js.js';
 import { handleMemberApi, getMemberAuth } from './src/api-member.js';
-import { sendBirthdayEmails, sendAnniversaryEmails, sendBirthdayTexts, sendAnniversaryTexts } from './src/api-emails.js';
+import { sendBirthdayEmails, sendAnniversaryEmails, sendBirthdayTexts, sendAnniversaryTexts, centralDayOfWeek } from './src/api-emails.js';
 import { sendWebPush } from './src/push-sender.js';
 
 // ── MAIN FETCH HANDLER ────────────────────────────────────────────────
@@ -81,15 +81,16 @@ async function pruneAuditLog(db) {
 // Send push notifications to members assigned to serve tomorrow.
 // Only sends on Saturdays (day 6) — reminding about Sunday assignments.
 async function sendScheduleReminders(env) {
-  // Only run on Saturdays (Central time ≈ UTC-5/6)
+  // Only run on Saturdays in Central time (cron fires at 14:00 UTC daily).
   const now = new Date();
-  if (now.getUTCDay() !== 6) return { skipped: 'not Saturday' };
+  if (centralDayOfWeek(now) !== 6) return { skipped: 'not Saturday' };
   if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) return { skipped: 'no VAPID keys' };
   if (!env.RSVP_STORE) return { skipped: 'no KV store' };
 
-  // Determine next Sunday's ISO date
-  const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
-  const tomorrowISO = tomorrow.toISOString().slice(0, 10);
+  // Next Sunday's ISO date in Central time.
+  const tomorrowISO = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(now.getTime() + 24 * 60 * 60 * 1000));
 
   // Fetch schedule from KV
   let schedule = [];

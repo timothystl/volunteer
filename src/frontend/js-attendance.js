@@ -40,23 +40,35 @@ function setAttChartMode(m) {
 }
 
 function _chartResizeHandle(fnName) {
-  return '<div style="height:8px;cursor:ns-resize;display:flex;align-items:center;justify-content:center;margin:2px 0;opacity:0.4;" onmousedown="'+fnName+'(event)" title="Drag to resize chart"><div style="width:32px;height:3px;background:var(--warm-gray);border-radius:2px;"></div></div>';
+  return '<div style="height:14px;cursor:ns-resize;display:flex;align-items:center;justify-content:center;margin:2px 0;opacity:0.4;touch-action:none;" onmousedown="'+fnName+'(event)" ontouchstart="'+fnName+'(event)" title="Drag to resize chart"><div style="width:32px;height:3px;background:var(--warm-gray);border-radius:2px;"></div></div>';
+}
+
+// Returns vertical screen position whether the event is mouse or touch.
+function _ptrY(e) {
+  if (e.touches && e.touches.length) return e.touches[0].clientY;
+  if (e.changedTouches && e.changedTouches.length) return e.changedTouches[0].clientY;
+  return e.clientY;
 }
 
 var _attResizing = false, _attResizeStartY = 0, _attResizeStartH = 0, _attResizeRaf = 0;
 function attChartResizeStart(e) {
   _attResizing = true;
-  _attResizeStartY = e.clientY;
+  _attResizeStartY = _ptrY(e);
   _attResizeStartH = _attChartH;
-  e.preventDefault();
+  if (e.preventDefault) e.preventDefault();
   document.addEventListener('mousemove', _attResizeMove);
   document.addEventListener('mouseup', _attResizeEnd);
+  document.addEventListener('touchmove', _attResizeMove, { passive: false });
+  document.addEventListener('touchend', _attResizeEnd);
+  document.addEventListener('touchcancel', _attResizeEnd);
 }
 var _attResizeMove = function(e) {
   if (!_attResizing) return;
+  if (e.cancelable && e.touches) e.preventDefault();
+  var y = _ptrY(e);
   cancelAnimationFrame(_attResizeRaf);
   _attResizeRaf = requestAnimationFrame(function() {
-    _attChartH = Math.max(120, Math.min(600, _attResizeStartH + e.clientY - _attResizeStartY));
+    _attChartH = Math.max(120, Math.min(600, _attResizeStartH + y - _attResizeStartY));
     renderAttendanceChart(_loadedServices);
   });
 };
@@ -64,21 +76,29 @@ var _attResizeEnd = function() {
   _attResizing = false;
   document.removeEventListener('mousemove', _attResizeMove);
   document.removeEventListener('mouseup', _attResizeEnd);
+  document.removeEventListener('touchmove', _attResizeMove);
+  document.removeEventListener('touchend', _attResizeEnd);
+  document.removeEventListener('touchcancel', _attResizeEnd);
 };
 
 // ── Report chart resize (YoY att, by-service att, giving trend) ───────
 var _rptResizing = false, _rptResizeStartY = 0, _rptResizeStartH = 0, _rptResizeRaf = 0, _rptResizeKey = '';
 function _rptResizeStart(e, key, h0) {
-  _rptResizing = true; _rptResizeKey = key; _rptResizeStartY = e.clientY; _rptResizeStartH = h0;
-  e.preventDefault();
+  _rptResizing = true; _rptResizeKey = key; _rptResizeStartY = _ptrY(e); _rptResizeStartH = h0;
+  if (e.preventDefault) e.preventDefault();
   document.addEventListener('mousemove', _rptResizeMoveH);
   document.addEventListener('mouseup', _rptResizeEndH);
+  document.addEventListener('touchmove', _rptResizeMoveH, { passive: false });
+  document.addEventListener('touchend', _rptResizeEndH);
+  document.addEventListener('touchcancel', _rptResizeEndH);
 }
 var _rptResizeMoveH = function(e) {
   if (!_rptResizing) return;
+  if (e.cancelable && e.touches) e.preventDefault();
+  var y = _ptrY(e);
   cancelAnimationFrame(_rptResizeRaf);
   _rptResizeRaf = requestAnimationFrame(function() {
-    var newH = Math.max(120, Math.min(600, _rptResizeStartH + e.clientY - _rptResizeStartY));
+    var newH = Math.max(120, Math.min(600, _rptResizeStartH + y - _rptResizeStartY));
     if (_rptResizeKey === 'yoy') {
       _yoyRptH = newH;
       var w = document.getElementById('att-yoy-chart-wrap');
@@ -132,6 +152,9 @@ var _rptResizeEndH = function() {
   _rptResizing = false;
   document.removeEventListener('mousemove', _rptResizeMoveH);
   document.removeEventListener('mouseup', _rptResizeEndH);
+  document.removeEventListener('touchmove', _rptResizeMoveH);
+  document.removeEventListener('touchend', _rptResizeEndH);
+  document.removeEventListener('touchcancel', _rptResizeEndH);
 };
 function yoyRptResizeStart(e) { _rptResizeStart(e, 'yoy', _yoyRptH); }
 function byServiceResizeStart(e) { _rptResizeStart(e, 'byService', _byServiceRptH); }

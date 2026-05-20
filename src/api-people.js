@@ -4,6 +4,24 @@ import { brevoUpsertContact, brevoBulkSync, brevoGetListContacts } from './api-e
 import { disambiguateHHName, normalizePhone } from './api-utils.js';
 import { makeBreezeClient } from './breeze.js';
 
+// ── Photo upload validation ──────────────────────────────────────────────────
+// Validates a multipart-form image File against size limit and magic-byte
+// signature. file.type from FormData is client-supplied and spoofable.
+async function validateImageUpload(file, maxBytes = 8 * 1024 * 1024) {
+  if (!file || !file.size) return { ok: false, status: 400, error: 'No file provided' };
+  if (file.size > maxBytes) return { ok: false, status: 413, error: 'Image too large (max 8 MB)' };
+  const buf = await file.arrayBuffer();
+  const b = new Uint8Array(buf, 0, Math.min(16, buf.byteLength));
+  let kind = null;
+  if (b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) kind = { ct: 'image/jpeg', ext: 'jpg' };
+  else if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) kind = { ct: 'image/png', ext: 'png' };
+  else if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) kind = { ct: 'image/gif', ext: 'gif' };
+  else if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+           b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) kind = { ct: 'image/webp', ext: 'webp' };
+  if (!kind) return { ok: false, status: 400, error: 'File is not a recognized image (JPEG/PNG/GIF/WebP)' };
+  return { ok: true, buf, ...kind };
+}
+
 // ── Breeze reverse-sync helpers ──────────────────────────────────────────────
 
 // Returns cached {email, phone, address} field IDs, discovering them from a
@@ -280,6 +298,42 @@ if (seg === 'people/bulk-member-type' && method === 'POST') {
     await db.prepare(`UPDATE people SET member_type=? WHERE id IN (${placeholders})`).bind(mt, ...chunk).run();
   }
   return json({ ok: true, updated: ids.length });
+}
+
+// Bulk apply tag changes across many people in a single request.
+// Body: { ids: number[], add: number[], remove: number[] }
+if (seg === 'people/bulk-tags' && method === 'POST') {
+  if (!isStaff) return json({ error: 'Insufficient permissions' }, 403);
+  let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+  const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean) : [];
+  const add = Array.isArray(b.add) ? b.add.map(Number).filter(Boolean) : [];
+  const remove = Array.isArray(b.remove) ? b.remove.map(Number).filter(Boolean) : [];
+  if (!ids.length) return json({ error: 'ids required' }, 400);
+  if (!add.length && !remove.length) return json({ error: 'add or remove required' }, 400);
+  const stmts = [];
+  const CHUNK = 80;
+  if (remove.length) {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const ph = chunk.map(() => '?').join(',');
+      const tagPh = remove.map(() => '?').join(',');
+      stmts.push(db.prepare(
+        `DELETE FROM person_tags WHERE person_id IN (${ph}) AND tag_id IN (${tagPh})`
+      ).bind(...chunk, ...remove));
+    }
+  }
+  if (add.length) {
+    // Use OR IGNORE to skip already-present (person_id, tag_id) pairs.
+    for (const pid of ids) {
+      for (const tid of add) {
+        stmts.push(db.prepare(
+          'INSERT OR IGNORE INTO person_tags(person_id, tag_id) VALUES(?, ?)'
+        ).bind(pid, tid));
+      }
+    }
+  }
+  if (stmts.length) await db.batch(stmts);
+  return json({ ok: true, people: ids.length, added: add.length, removed: remove.length });
 }
 
 // Bulk-mark baptized / confirmed flags (date-unknown). Body: {ids, baptized: 'set'|'unset', confirmed: 'set'|'unset'}
@@ -621,12 +675,10 @@ if (photoMatch && method === 'POST') {
   const pid = parseInt(photoMatch[1]);
   let file;
   try { const fd = await req.formData(); file = fd.get('photo'); } catch { return json({ error: 'Invalid form data' }, 400); }
-  if (!file || !file.size) return json({ error: 'No file provided' }, 400);
-  const ct = file.type || 'image/jpeg';
-  if (!ct.startsWith('image/')) return json({ error: 'File must be an image' }, 400);
-  const ext = ct === 'image/png' ? 'png' : ct === 'image/webp' ? 'webp' : 'jpg';
-  const r2Key = `people/${pid}/photo.${ext}`;
-  await env.PHOTOS.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: ct } });
+  const v = await validateImageUpload(file);
+  if (!v.ok) return json({ error: v.error }, v.status);
+  const r2Key = `people/${pid}/photo.${v.ext}`;
+  await env.PHOTOS.put(r2Key, v.buf, { httpMetadata: { contentType: v.ct } });
   const photoUrl = `/admin/r2photo/${r2Key}`;
   await db.prepare('UPDATE people SET photo_url=? WHERE id=?').bind(photoUrl, pid).run();
   return json({ ok: true, photo_url: photoUrl });
@@ -676,12 +728,10 @@ if (hhPhotoMatch && method === 'POST') {
   const hid = parseInt(hhPhotoMatch[1]);
   let file;
   try { const fd = await req.formData(); file = fd.get('photo'); } catch { return json({ error: 'Invalid form data' }, 400); }
-  if (!file || !file.size) return json({ error: 'No file provided' }, 400);
-  const ct = file.type || 'image/jpeg';
-  if (!ct.startsWith('image/')) return json({ error: 'File must be an image' }, 400);
-  const ext = ct === 'image/png' ? 'png' : ct === 'image/webp' ? 'webp' : 'jpg';
-  const r2Key = `households/${hid}/photo.${ext}`;
-  await env.PHOTOS.put(r2Key, await file.arrayBuffer(), { httpMetadata: { contentType: ct } });
+  const v = await validateImageUpload(file);
+  if (!v.ok) return json({ error: v.error }, v.status);
+  const r2Key = `households/${hid}/photo.${v.ext}`;
+  await env.PHOTOS.put(r2Key, v.buf, { httpMetadata: { contentType: v.ct } });
   const photoUrl = `/admin/r2photo/${r2Key}`;
   await db.prepare('UPDATE households SET photo_url=? WHERE id=?').bind(photoUrl, hid).run();
   return json({ ok: true, photo_url: photoUrl });

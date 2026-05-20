@@ -2,6 +2,24 @@
 import { json, SCHED_CORS } from './auth.js';
 import { XMAS_MARKET_ROLES } from './db.js';
 
+// Centralized office reply-to so it can be overridden via env.
+function officeEmail(env) { return (env && env.REPLY_TO_EMAIL) || 'office@timothystl.org'; }
+
+// Pretty service time from internal token.
+function formatServiceTime(svc) {
+  if (svc === '8am') return '8:00 AM';
+  if (svc === '10:45am') return '10:45 AM';
+  return svc;
+}
+
+// Pretty RSVP status label.
+function formatRsvpStatus(s) {
+  if (s === 'confirmed') return '✓ Confirmed';
+  if (s === 'needs_changes') return '⚠ Needs Changes';
+  if (s === 'declined') return '✗ Declined';
+  return '';
+}
+
 
 // ── XMAS MARKET TIME FALLBACK ─────────────────────────────────────────
 // For roles where D1 has empty start_time, overlay XMAS_MARKET_ROLES data
@@ -123,7 +141,7 @@ export async function handleSignup(req, env) {
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + resendKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: emailFrom, to: email, reply_to: 'office@timothystl.org',
+      body: JSON.stringify({ from: emailFrom, to: email, reply_to: officeEmail(env),
         subject: 'Thanks for signing up to serve at Timothy!', text }),
     }).catch(() => { /* non-fatal */ });
   }
@@ -382,12 +400,12 @@ export async function handleSchedRsvpPortal(req, env, url) {
   if (!record) return schedHtmlPage('Not Found', '<p>This link has expired or is invalid.</p>');
   const e = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const rows = (record.assignments || []).map(function(a, i) {
-    const svcLabel = a.svc==='8am'?'8:00 AM':a.svc==='10:45am'?'10:45 AM':a.svc;
+    const svcLabel = formatServiceTime(a.svc);
     const cfUrl = url.origin+'/rsvp?token='+encodeURIComponent(token)+'&idx='+i+'&status=confirmed';
     const ncUrl = url.origin+'/rsvp?token='+encodeURIComponent(token)+'&idx='+i+'&status=needs_changes';
     const dcUrl = url.origin+'/rsvp?token='+encodeURIComponent(token)+'&idx='+i+'&status=declined';
     const st = a.status||'pending';
-    const stLabel = st==='confirmed'?'✓ Confirmed':st==='needs_changes'?'⚠ Needs Changes':st==='declined'?'✗ Declined':'';
+    const stLabel = formatRsvpStatus(st);
     return '<tr>'
       +'<td style="padding:8px 12px;border-bottom:1px solid #eee;">'+e(a.date)+'</td>'
       +'<td style="padding:8px 12px;border-bottom:1px solid #eee;">'+e(svcLabel)+'</td>'
@@ -436,9 +454,9 @@ export async function handleSchedRsvp(req, env, url) {
     const resendKey = env.RESEND_API_KEY || '';
     const emailFrom = env.EMAIL_FROM || '';
     if (resendKey && emailFrom) {
-      const statusLabel = status==='confirmed'?'✓ Confirmed':status==='needs_changes'?'⚠ Needs Changes':'✗ Declined';
+      const statusLabel = formatRsvpStatus(status) || status;
       const assignmentLines = (record.assignments||[]).map(function(a) {
-        return '  • '+a.date+' — '+(a.svc==='8am'?'8:00 AM':a.svc==='10:45am'?'10:45 AM':a.svc)+' — '+a.role;
+        return '  • '+a.date+' — '+formatServiceTime(a.svc)+' — '+a.role;
       }).join('\n');
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -578,7 +596,7 @@ export async function handleSignupSendEmail(req, env, signupId) {
   const emailFrom = env.EMAIL_FROM || '';
   if (!resendKey || !emailFrom) return json({ error: 'Email not configured (RESEND_API_KEY / EMAIL_FROM missing)' }, 500);
 
-  const replyTo = (b.reply_to || 'office@timothystl.org').trim();
+  const replyTo = (b.reply_to || officeEmail(env)).trim();
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + resendKey, 'Content-Type': 'application/json' },

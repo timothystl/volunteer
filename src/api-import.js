@@ -350,7 +350,10 @@ if (seg === 'config/member-type-map' && method === 'PUT') {
 }
 
 if (seg === 'config/church' && method === 'GET') {
-  const keys = ['church_ein','church_from_name','church_from_email','giving_letter_template','church_name'];
+  // EIN is admin-only (PII). Non-admins get the rest of the config without it.
+  const keys = isAdmin
+    ? ['church_ein','church_from_name','church_from_email','giving_letter_template','church_name']
+    : ['church_from_name','church_from_email','giving_letter_template','church_name'];
   const rows = (await db.prepare(`SELECT key, value FROM chms_config WHERE key IN (${keys.map(()=>'?').join(',')})`).bind(...keys).all()).results || [];
   const config = {};
   for (const r of rows) config[r.key] = r.value;
@@ -1770,7 +1773,10 @@ if (seg === 'import/breeze-giving' && method === 'POST') { try {
 // Accepts the TSV export from Breeze (Contributions > Export)
 // Fund(s) format: "40085 General Fund" or "40085 General Fund (160.00), 49094 Tuition Aid (40.00)"
 if (seg === 'import/breeze-giving-csv' && method === 'POST') { try {
+  const cl = parseInt(req.headers.get('Content-Length') || '0');
+  if (cl && cl > 10 * 1024 * 1024) return json({ error: 'CSV too large (max 10 MB)' }, 413);
   const csvText = (await req.text()).trim();
+  if (csvText.length > 10 * 1024 * 1024) return json({ error: 'CSV too large (max 10 MB)' }, 413);
   if (!csvText) return json({ error: 'No CSV data provided' }, 400);
 
   const lines = csvText.split('\n').map(l => l.trimEnd()).filter(l => l.trim());

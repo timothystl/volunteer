@@ -19,12 +19,33 @@ async function findPersonByEmail(db, email) {
   ).bind(email).first();
 }
 
+// Per-IP rate limit for intake endpoints. Anti-spam guard since the only
+// authentication is a shared X-Intake-Key from the website worker.
+async function intakeRateLimitOk(env, req, path) {
+  if (!env.RSVP_STORE) return true; // KV not available; skip
+  const ip = req.headers.get('CF-Connecting-IP') || req.headers.get('X-Forwarded-For') || 'unknown';
+  const bucket = path.replace('/api/intake/', '');
+  const key = `intake_rl:${bucket}:${ip}`;
+  const raw = await env.RSVP_STORE.get(key);
+  const count = raw ? parseInt(raw) || 0 : 0;
+  if (count >= 10) return false; // 10 submissions per IP per 15 minutes
+  await env.RSVP_STORE.put(key, String(count + 1), { expirationTtl: 900 });
+  return true;
+}
+
 export async function handleIntakeApi(req, env, path) {
   const expectedKey = env.CHMS_INTAKE_API_KEY || '';
   if (!expectedKey) return json({ error: 'Intake not configured' }, 503);
   const key = req.headers.get('X-Intake-Key') || '';
   if (key !== expectedKey) return json({ error: 'Unauthorized' }, 401);
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+  if (!(await intakeRateLimitOk(env, req, path))) {
+    return json({ error: 'Rate limit exceeded. Please try again later.' }, 429);
+  }
+
+  // Reject oversize payloads early.
+  const cl = parseInt(req.headers.get('Content-Length') || '0');
+  if (cl && cl > 20000) return json({ error: 'Payload too large' }, 413);
 
   let body = {};
   try { body = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
