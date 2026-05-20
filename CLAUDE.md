@@ -395,6 +395,9 @@ Use this as the session-to-session roadmap. Complete one phase fully before star
 
 ### Auth / Login
 - [ ] **AU1** — Forgot password flow: add email field to each user account in admin; add "Forgot password?" link on login page that sends a reset email via Resend. (noted 2026-05-01)
+- [x] **FH6** — Done 2026-05-20 (v225). New `PATCH /admin/api/people/:id` sparse-update endpoint that only writes fields present in the body (plus `tag_ids` array if present). `markSeenToday`, `savePvTags`, `confirmAddToHh` switched from PUT-with-full-snapshot to PATCH-with-only-the-changed-field. No more clobbering of concurrent edits.
+- [x] **RI2** — Done 2026-05-20 (v225). Breeze sync now finds a separate boolean/dropdown field for "Baptized"/"Confirmed" (when a sibling field exists alongside the date field) and sets `baptized=1`/`confirmed=1` if either the date OR the dropdown is truthy. Both bulk and per-person sync paths updated; new `isYes`/`isYesPS` helpers handle "Yes"/"true"/"1"/"baptized"/"confirmed"/"on" values. Existing rows pick up the flag on next sync.
+- [x] **BUG2** — Partial 2026-05-20 (v225). Improved validate-address error surfacing in both per-person and contact-editor buttons — `.catch` handlers now show the real error and prompt admin to set USPS keys. Documented `USPS_CLIENT_ID`/`USPS_CLIENT_SECRET`/`USPS_USER_ID`/`LOB_API_KEY` as optional secrets in `SECRETS.md` with provisioning steps. (Bulk-validate already exists in Settings → Import/Export.) The underlying error itself is "no real provider configured" — fix is to set USPS OAuth keys on the worker.
 
 ### Settings
 - [x] **ST1** — Hide testing sections in Settings tab from non-admin users (birthday/anniversary/SMS test buttons, etc.) — done 2026-05-01 (v165). Added `require-admin` class to EM2 and SMS1 import-cards.

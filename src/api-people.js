@@ -527,6 +527,61 @@ if (pmatch) {
     }
     return json({ ok: true });
   }
+  if (method === 'PATCH') {
+    // Sparse update — only fields present in the body are touched. Used by
+    // small UI actions (mark seen, tag-only save, add-to-household) so they
+    // don't have to round-trip the full snapshot and risk overwriting fields
+    // changed concurrently.
+    let b; try { b = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+    const oldPerson = await db.prepare('SELECT * FROM people WHERE id=?').bind(pid).first();
+    if (!oldPerson) return json({ error: 'Person not found' }, 404);
+    const allowed = {
+      first_name:'s', last_name:'s', email:'s', phone:'phone', address1:'s', address2:'s',
+      city:'s', state:'s', zip:'s', member_type:'lower', dob:'s', baptism_date:'s',
+      confirmation_date:'s', anniversary_date:'s', death_date:'s', deceased:'bool',
+      household_id:'int_or_null', family_role:'s', photo_url:'s', notes:'s',
+      public_directory:'bool', envelope_number:'s', last_seen_date:'s', gender:'s',
+      marital_status:'s', dir_hide_address:'bool', dir_hide_phone:'bool',
+      dir_hide_email:'bool', dir_hide_dob:'bool', dir_hide_anniversary:'bool',
+      baptized:'bool', confirmed:'bool', sms_opt_in:'bool',
+    };
+    const sets = [], binds = [];
+    for (const [field, kind] of Object.entries(allowed)) {
+      if (!(field in b)) continue;
+      let v = b[field];
+      if (kind === 's')              v = String(v ?? '');
+      else if (kind === 'lower')     v = String(v ?? '').toLowerCase();
+      else if (kind === 'phone')     v = normalizePhone(String(v ?? ''));
+      else if (kind === 'bool')      v = v ? 1 : 0;
+      else if (kind === 'int_or_null') v = (v === null || v === '' || v === undefined) ? null : parseInt(v);
+      sets.push(`${field}=?`); binds.push(v);
+    }
+    if (sets.length) {
+      sets.push('locally_edited=1');
+      binds.push(pid);
+      await db.prepare(`UPDATE people SET ${sets.join(',')} WHERE id=?`).bind(...binds).run();
+    }
+    if (Array.isArray(b.tag_ids)) {
+      const tagStmts = [db.prepare('DELETE FROM person_tags WHERE person_id=?').bind(pid)];
+      for (const tid of b.tag_ids) {
+        tagStmts.push(db.prepare('INSERT OR IGNORE INTO person_tags(person_id,tag_id) VALUES(?,?)').bind(pid, tid));
+      }
+      await db.batch(tagStmts).catch(() => {});
+    }
+    const personName = [oldPerson.first_name, oldPerson.last_name].filter(Boolean).join(' ');
+    const auditStmt = db.prepare(
+      `INSERT INTO audit_log(action,entity_type,entity_id,person_name,field,old_value,new_value) VALUES(?,?,?,?,?,?,?)`
+    );
+    const auditOps = [];
+    for (const field of Object.keys(allowed)) {
+      if (!(field in b)) continue;
+      const ov = String(oldPerson[field] ?? '');
+      const nv = String(b[field] ?? '');
+      if (ov !== nv) auditOps.push(auditStmt.bind('update','person',pid,personName,field,ov,nv));
+    }
+    if (auditOps.length) await db.batch(auditOps);
+    return json({ ok: true });
+  }
   if (method === 'DELETE') {
     const hard = url.searchParams.get('hard') === 'true';
     if (hard && !isAdmin) return json({ error: 'Access denied: permanent delete requires admin access' }, 403);
