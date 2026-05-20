@@ -637,4 +637,5 @@ function volAddRole(evId) {
     volLoadEvents(evId);
   }).catch(function(e){alert('Error: '+e);});
 }
+</script>
 `;
