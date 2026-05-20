@@ -63,7 +63,10 @@ function openBatch(id) {
   document.querySelectorAll('.batch-row').forEach(function(r) {
     if (r.getAttribute('onclick') && r.getAttribute('onclick').indexOf('(' + id + ')') >= 0) r.classList.add('selected');
   });
-  api('/admin/api/giving/batches/' + id).then(function(b) { renderBatchDetail(b); });
+  api('/admin/api/giving/batches/' + id).then(function(b) { renderBatchDetail(b); }).catch(function() {
+    var el = document.getElementById('batch-detail');
+    if (el) el.innerHTML = '<div style="padding:24px;color:var(--danger);">Error loading batch.</div>';
+  });
 }
 function renderBatchDetail(b) {
   _currentBatch = b;

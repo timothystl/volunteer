@@ -986,8 +986,7 @@ function uploadHouseholdPhoto(blob) {
   if (btn) { btn.disabled = true; btn.textContent = 'Uploading…'; }
   var fd = new FormData();
   fd.append('photo', blob, 'photo.jpg');
-  fetch('/admin/api/households/' + hid + '/photo', { method: 'POST', body: fd, credentials: 'same-origin' })
-    .then(function(r) { return r.json(); })
+  api('/admin/api/households/' + hid + '/photo', { method: 'POST', body: fd, credentials: 'same-origin' })
     .then(function(d) {
       if (btn) { btn.disabled = false; btn.innerHTML = '&#128247; Upload Photo'; }
       if (d && d.ok && d.photo_url) {
@@ -1018,8 +1017,7 @@ function removeHHPhoto() {
   var hid = _editingHouseholdId;
   if (!hid) return;
   if (!confirm('Remove this household photo?')) return;
-  fetch('/admin/api/households/' + hid + '/photo', { method: 'DELETE', credentials: 'same-origin' })
-    .then(function(r) { return r.json(); })
+  api('/admin/api/households/' + hid + '/photo', { method: 'DELETE', credentials: 'same-origin' })
     .then(function(d) {
       if (!d || !d.ok) { alert('Remove failed: ' + ((d && d.error) || 'unknown error')); return; }
       document.getElementById('hm-photo').value = '';
@@ -1114,13 +1112,12 @@ function usePVPhotoFrom(idx) {
   var p = _currentPvPerson;
   var t = _pvPickerTiles[idx];
   if (!p || !t) return;
-  fetch('/admin/api/people/' + p.id + '/photo', {
+  api('/admin/api/people/' + p.id + '/photo', {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     credentials: 'same-origin',
     body: JSON.stringify({ photo_url: t.url })
-  }).then(function(r) { return r.json(); })
-    .then(function(d) {
+  }).then(function(d) {
       if (!d || !d.ok) { alert('Could not apply photo: ' + ((d && d.error) || 'unknown')); return; }
       closeModal('pv-photo-pick-modal');
       _currentPvPerson.photo_url = d.photo_url;
@@ -1153,8 +1150,7 @@ function removePersonPhoto() {
   var pid = _currentPvPerson && _currentPvPerson.id;
   if (!pid) return;
   if (!confirm('Remove this person’s photo? Initials will show until you upload a new one.')) return;
-  fetch('/admin/api/people/' + pid + '/photo', { method: 'DELETE', credentials: 'same-origin' })
-    .then(function(r) { return r.json(); })
+  api('/admin/api/people/' + pid + '/photo', { method: 'DELETE', credentials: 'same-origin' })
     .then(function(d) {
       if (!d || !d.ok) { alert('Remove failed: ' + ((d && d.error) || 'unknown error')); return; }
       _currentPvPerson.photo_url = '';
@@ -1175,8 +1171,7 @@ function uploadPersonPhoto(blob) {
   if (overlay) { overlay.style.opacity = '1'; overlay.innerHTML = '<span style="color:white;font-size:12px;">Uploading\u2026</span>'; }
   var fd = new FormData();
   fd.append('photo', blob, 'photo.jpg');
-  fetch('/admin/api/people/' + pid + '/photo', { method: 'POST', body: fd, credentials: 'same-origin' })
-    .then(function(r) { return r.json(); })
+  api('/admin/api/people/' + pid + '/photo', { method: 'POST', body: fd, credentials: 'same-origin' })
     .then(function(d) {
       if (overlay) { overlay.style.opacity = ''; overlay.innerHTML = '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="white" stroke-width="1.8"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>'; }
       if (d && d.ok && d.photo_url) {
@@ -1985,10 +1980,7 @@ function toggleTagPick(el) {
 function getSelectedTagIds() {
   var ids = [];
   document.querySelectorAll('#pm-tag-picker .tag-chip').forEach(function(el) {
-    // A chip is "selected" if it has a color border (not the default warm-gray)
-    if (el.style.borderColor !== 'var(--border)' && el.style.borderColor !== 'rgb(232, 224, 208)' && el.style.borderColor) {
-      ids.push(parseInt(el.dataset.tid));
-    }
+    if (el.dataset.picked === '1') ids.push(parseInt(el.dataset.tid));
   });
   return ids;
 }
@@ -2037,8 +2029,6 @@ function savePerson() {
     envelope_number: document.getElementById('pm-envelope').value.trim(),
     last_seen_date: document.getElementById('pm-last-seen').value,
     notes: document.getElementById('pm-notes').value,
-    gender: (document.getElementById('pm-gender') || {value:''}).value,
-    marital_status: (document.getElementById('pm-marital') || {value:''}).value,
     sms_opt_in: document.getElementById('pm-sms-opt-in').checked ? 1 : 0,
     tag_ids: getSelectedTagIds()
   };

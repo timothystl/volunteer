@@ -54,11 +54,15 @@ function sendBatchStatements(yr) {
 }
 function doSendBatch(yr, checks, status) {
   var ids = Array.from(checks).map(function(cb){return cb.dataset.pid;});
-  var total = ids.length, done = 0, failed = 0;
+  var total = ids.length, done = 0, failed = 0, skipped = 0;
   status.textContent = 'Sending 0/' + total + '…'; status.className = 'import-status';
   function sendNext() {
     if (!ids.length) {
-      status.textContent = 'Done. ' + done + ' sent, ' + failed + ' failed.';
+      var msg = 'Done. ' + done + ' sent';
+      if (skipped) msg += ', ' + skipped + ' skipped (no email)';
+      if (failed) msg += ', ' + failed + ' failed';
+      msg += '.';
+      status.textContent = msg;
       status.className = failed ? 'import-status' : 'import-status ok';
       return;
     }
@@ -67,7 +71,7 @@ function doSendBatch(yr, checks, status) {
       if (d.error || !d.person) { failed++; sendNext(); return; }
       d._mode = 'person';
       var p = d.person || {};
-      if (!p.email) { failed++; sendNext(); return; }
+      if (!p.email) { skipped++; sendNext(); return; }
       var churchName = _churchConfig.church_name || 'Timothy Lutheran Church';
       var letterHtml = renderLetterHTML(d);
       var fullHtml = '<div style="font-family:Georgia,serif;font-size:14px;line-height:1.65;max-width:560px;">'
@@ -84,7 +88,7 @@ function doSendBatch(yr, checks, status) {
       });
     }).then(function(r) {
       if (r && r.ok) done++; else failed++;
-      status.textContent = 'Sending ' + (done+failed) + '/' + total + '…';
+      status.textContent = 'Sending ' + (done+failed+skipped) + '/' + total + '…';
       sendNext();
     }).catch(function() { failed++; sendNext(); });
   }
@@ -509,11 +513,11 @@ function runBreezeGivingSync() {
   var status = document.getElementById('giving-sync-status');
   if (!from || !to) { status.textContent = 'Please select a date range.'; status.className = 'import-status err'; return; }
   status.textContent = 'Syncing ' + from + ' to ' + to + '…'; status.className = 'import-status';
-  fetch('/admin/api/import/breeze-giving', {
+  api('/admin/api/import/breeze-giving', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({start: from, end: to})
-  }).then(function(r) { return r.json(); }).then(function(d) {
+  }).then(function(d) {
     if (d.error) { status.textContent = 'Error: ' + d.error; status.className = 'import-status err'; return; }
     var msg = 'Done. ' + (d.imported||0) + ' imported';
     if (d.lateImported) msg += ', ' + d.lateImported + ' cross-year late entries imported';
@@ -560,11 +564,11 @@ function runBreezeGivingAll() {
     var yr = years[idx++];
     status.textContent = 'Syncing ' + yr + '… (' + idx + '/' + years.length + ' years)';
     status.className = 'import-status';
-    fetch('/admin/api/import/breeze-giving', {
+    api('/admin/api/import/breeze-giving', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({start: yr + '-01-01', end: yr + '-12-31'})
-    }).then(function(r) { return r.json(); }).then(function(d) {
+    }).then(function(d) {
       if (d.error) {
         btn.disabled = false;
         status.textContent = 'Error on ' + yr + ': ' + d.error;
@@ -739,8 +743,8 @@ function restoreBreezeActive() {
       if (status) { status.textContent = 'Error: ' + e.message; status.className = 'import-status err'; }
     });
 }
-function runBreezeTagSync() {
-  var btn = event && event.currentTarget;
+function runBreezeTagSync(btnEl) {
+  var btn = btnEl || null;
   var origLabel = btn ? btn.innerHTML : '';
   var status = document.getElementById('breeze-tag-status');
   if (btn) { btn.disabled = true; btn.textContent = 'Syncing tags\u2026'; }
@@ -826,11 +830,11 @@ function importGivingCSV(file) {
       }
       var pct = Math.round(idx / chunks.length * 100);
       status.textContent = 'Uploading\u2026 ' + pct + '% (' + (idx * chunkSize) + ' of ' + total + ' rows)';
-      fetch('/admin/api/import/giving-csv', {
+      api('/admin/api/import/giving-csv', {
         method: 'POST',
         headers: {'Content-Type': 'text/csv'},
         body: header + '\n' + chunks[idx].join('\n')
-      }).then(function(r) { return r.json(); }).then(function(d) {
+      }).then(function(d) {
         if (d.error) { status.textContent = 'Error on chunk ' + idx + ': ' + d.error; status.className = 'import-status err'; return; }
         totImported += d.imported   || 0;
         totSkipped  += d.skipped    || 0;
@@ -884,9 +888,7 @@ function importPeopleCSV() {
   status.textContent = 'Uploading…'; status.className = 'import-status';
   var reader = new FileReader();
   reader.onload = function(e) {
-    fetch('/admin/api/import/people-csv', {method:'POST', headers:{'Content-Type':'text/csv'}, body:e.target.result}).then(function(r) {
-      return r.json();
-    }).then(function(d) {
+    api('/admin/api/import/people-csv', {method:'POST', headers:{'Content-Type':'text/csv'}, body:e.target.result}).then(function(d) {
       if (d.error) { status.textContent = 'Error: ' + d.error; status.className = 'import-status err'; return; }
       status.textContent = 'Done. ' + (d.imported||0) + ' imported, ' + (d.updated||0) + ' updated.';
       status.className = 'import-status ok';
@@ -935,9 +937,7 @@ function importAttendanceTSV() {
   status.textContent = 'Uploading…'; status.className = 'import-status';
   var reader = new FileReader();
   reader.onload = function(e) {
-    fetch('/admin/api/import/attendance-tsv', {method:'POST', headers:{'Content-Type':'text/plain'}, body:e.target.result}).then(function(r) {
-      return r.json();
-    }).then(function(d) {
+    api('/admin/api/import/attendance-tsv', {method:'POST', headers:{'Content-Type':'text/plain'}, body:e.target.result}).then(function(d) {
       if (d.error) { status.textContent = 'Error: ' + d.error; status.className = 'import-status err'; return; }
       var msg = 'Done. ' + d.imported + ' services imported, ' + d.skipped + ' skipped (duplicates/Vietnamese), ' + d.skippedFuture + ' future dates skipped. (' + d.total + ' data rows in file)';
       if (d.sample) msg += ' | First row date parsed: "' + (d.sample.col3||'?') + '" → ' + (d.sample.parsed ? d.sample.parsed.date : 'FAILED');
