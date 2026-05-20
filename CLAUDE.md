@@ -204,29 +204,29 @@ Use this as the session-to-session roadmap. Complete one phase fully before star
 
 ---
 
-### Phase 8 — Critical Security Fixes (deploy immediately)
+### Phase 8 — Critical Security Fixes ✅ DONE 2026-05-20
 **Goal:** Eliminate SQL injection, broken auth fallback, and missing role guards. Zero behavior change for legitimate users. Ship as a single hotfix PR.
 
-- [ ] **SEC1** — SQL injection: `api-households.js` line ~19 — `hhMemberType` query param interpolated directly into SQL. Fix: validate against allowlist `['member','visitor','regular_attender','friend']` and use `.bind()`. (`api-households.js`)
+- [x] **SEC1** — Closed — already fixed. `api-households.js` validates `hhMemberType` against allowlist and uses `.bind()`. (2026-05-20)
 - [x] **SEC2** — SQL injection: `api-people.js` line ~766 — `entry.field` interpolated into column position. Closed — strict allowlist check immediately before the interpolation (`allowedFields.includes(entry.field)`) makes injection impossible in practice. Style could be improved to a `switch`, but no exploitable path exists. (2026-05-19)
-- [ ] **SEC3** — SQL injection: `api-reports.js` line ~433 — prayer CSV export builds `WHERE pr.status = '${statusParam}'` by string concatenation. Replace with a parameterized bind. (`api-reports.js`)
-- [ ] **SEC4** — Auth fallback: `api-chms.js` line ~476 — `role || 'admin'` grants full admin to any unauthenticated request that passes the outer router. Fix: `if (!role) return json({ error: 'Unauthorized' }, 401)`. (`api-chms.js`)
-- [ ] **SEC5** — Missing role guard: `api-giving.js` — all write handlers accept `isFinance`/`isAdmin` flags but never check them. Add `if (!isFinance) return json({ error: 'Access denied' }, 403)` at the top of each write handler (create batch, add entry, edit entry, delete entry, quick-entry). (`api-giving.js`)
-- [ ] **SEC6** — Missing role guard: `api-people.js` line ~264 — `POST /people/bulk-member-type` has no `isStaff` check. Finance-role users can silently bulk-change membership types. Fix: add `if (!isStaff) return json({ error: 'Access denied' }, 403)`. (`api-people.js`)
-- [ ] **SEC7** — Missing role guard: `api-people.js` line ~756 — `POST /audit/undo` has no role check; any staff user can undo any field change on any person. Fix: require `isAdmin`. (`api-people.js`)
-- [ ] **SEC8** — Missing role guard: `api-utils.js` line ~268 — `POST /utils/validate-address` is reachable by any authenticated user including `member` role, enabling quota exhaustion on the USPS/Lob API. Fix: add `if (!canEdit) return json({ error: 'Access denied' }, 403)`. (`api-utils.js`)
+- [x] **SEC3** — Closed — already fixed. `api-reports.js` prayer CSV export validates status against allowlist and uses parameterized bind. (2026-05-20)
+- [x] **SEC4** — Closed — already fixed. `role || 'admin'` pattern no longer exists in `api-chms.js`. (2026-05-20)
+- [x] **SEC5** — Closed — already fixed. `api-giving.js` line 6: `if (method !== 'GET' && !isFinance) return json({error:'Access denied'},403)` guards all write handlers. (2026-05-20)
+- [x] **SEC6** — Closed — already fixed. `POST /people/bulk-member-type` has `if (!isStaff)` guard. (2026-05-20)
+- [x] **SEC7** — Closed — already fixed. `POST /audit/undo` requires `isAdmin`. (2026-05-20)
+- [x] **SEC8** — Closed — already fixed. `POST /utils/validate-address` requires `canEdit`. (2026-05-20)
 
 **Done when:** All eight items fixed, `npm test` passes, manual smoke test of auth + giving + audit-undo confirms correct 403 behavior.
 
 ---
 
-### Phase 9 — XSS Fixes
+### Phase 9 — XSS Fixes ✅ DONE 2026-05-20
 **Goal:** Eliminate all cross-site scripting vectors. None of these change any feature behavior.
 
-- [ ] **XSS1** — `esc()` does not encode single quotes → stored XSS in onclick attributes across `js-people.js`, `js-dashboard.js`, `js-households.js`. Every pattern like `onclick="fn('+p.id+',\''+esc(p.email)+'\', ...)"` is exploitable by any person whose name/email contains a single quote followed by JS. Fix: either add `'` → `&#39;` to `esc()` in `js-core.js` (simplest — fixes all call sites at once) **or** refactor all onclick string args to use `data-*` attributes and read them in the handler (preferred long-term). The `reviewArchive` pattern on `js-dashboard.js` line ~511 is the one correct example to follow.
-- [ ] **XSS2** — `pvField()` in `js-people.js` line ~584 — puts raw DB values (including values written by Breeze sync) directly into `innerHTML` without `esc()`. Fix: wrap `val` in `esc()` inside `pvField`; create a `pvFieldHtml()` variant for callers that intentionally pass pre-built HTML (links, badges).
-- [ ] **XSS3** — Organization website href in `js-households.js` line ~306 allows `javascript:` protocol injection. A stored `javascript:alert(1)` URL executes for any admin viewing that organization. Fix: `var safeUrl = /^https?:\/\//i.test(o.website) ? o.website : '';` before building the anchor.
-- [ ] **XSS4** — `printRegister()` in `js-register.js` lines ~233–253 builds a full HTML document in a new window with all record fields (name, father, mother, sponsors, notes, officiant, place, etc.) concatenated raw. `renderRegisterList()` correctly uses `esc()` — bring `printRegister()` to parity.
+- [x] **XSS1** — Closed — already fixed. `esc()` in `js-core.js` encodes `'` → `&#39;`. (2026-05-20)
+- [x] **XSS2** — Closed — already fixed. `pvField()` wraps `val` in `esc()`; `pvFieldHtml()` variant exists for pre-built HTML. (2026-05-20)
+- [x] **XSS3** — Closed — already fixed. Org website uses `/^https?:\/\//i.test(o.website)` guard before building anchor. (2026-05-20)
+- [x] **XSS4** — Closed — already fixed. `printRegister()` uses `esc()` on all fields. (2026-05-20)
 
 **Done when:** All four items fixed; verify with a test person whose name contains `<script>` and `'` that no JS executes in any view.
 
