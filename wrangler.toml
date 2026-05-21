@@ -2,6 +2,10 @@ name = "tlc-chms"
 main = "tlc-volunteer-worker.js"
 compatibility_date = "2024-01-01"
 
+[vars]
+EMAIL_FROM     = "TLC Gather <noreply@notify.timothystl.org>"
+REPLY_TO_EMAIL = "dinger@timothystl.org"
+
 [observability]
 enabled = true
 

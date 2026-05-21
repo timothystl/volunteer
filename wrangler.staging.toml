@@ -8,6 +8,10 @@ workers_dev = true
 # Migrate:  wrangler d1 migrations apply tlc-volunteer-db-staging --remote --config wrangler.staging.toml
 # URL:      https://breeze-proxy-worker-staging.<subdomain>.workers.dev
 
+[vars]
+EMAIL_FROM     = "TLC Gather <noreply@notify.timothystl.org>"
+REPLY_TO_EMAIL = "dinger@timothystl.org"
+
 [observability]
 enabled = true
 
