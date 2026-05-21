@@ -257,12 +257,14 @@ export async function schedKvPut(env, key, value) {
 
 // ── /email/send ──────────────────────────────────────────────────────────────
 export async function handleSchedEmailSend(req, env) {
-  // Header takes priority over env so the key the user configured in the
-  // scheduler UI keeps working even if env.RESEND_API_KEY is unset or stale.
-  // The cron-driven birthday/anniversary paths in api-emails.js use env directly.
-  const resendKey = req.headers.get('X-Resend-Key') || env.RESEND_API_KEY || '';
-  const emailFrom = req.headers.get('X-Email-From') || env.EMAIL_FROM || '';
-  if (!resendKey) return schedJson({ error: 'Missing Resend API key' }, 400);
+  // env is the single source of truth — set RESEND_API_KEY + EMAIL_FROM on
+  // the Worker and rotate them there. The X-Resend-Key / X-Email-From
+  // headers are no longer read; old scheduler UI builds may still send them
+  // but they're ignored.
+  const resendKey = env.RESEND_API_KEY || '';
+  const emailFrom = env.EMAIL_FROM || '';
+  if (!resendKey) return schedJson({ error: 'RESEND_API_KEY not set on the Worker' }, 500);
+  if (!emailFrom) return schedJson({ error: 'EMAIL_FROM not set on the Worker' }, 500);
   let body;
   try { body = await req.json(); } catch { return schedJson({ error: 'Invalid JSON' }, 400); }
   const payload = { from: emailFrom || body.from || '', to: body.to, subject: body.subject,

@@ -2837,10 +2837,8 @@ function buildPersonIcal(person, assignments) {
 
 function sendReminderEmails() {
   var s = getBreezeSettings();
-  if (!_embedded && (!s.resendKey || !s.emailFrom)) {
-    alert('Please configure your Resend API key and From address in the Settings tab first.');
-    return;
-  }
+  // Resend config now lives in env on the Worker; server returns a clear
+  // error if RESEND_API_KEY / EMAIL_FROM are missing.
   if (!currentSchedule.length) {
     alert('Generate a schedule first.');
     return;
@@ -2979,8 +2977,6 @@ function sendReminderEmails() {
         return fetch(s.workerUrl + '/email/send', {
           method: 'POST',
           headers: Object.assign({
-            'X-Resend-Key':  s.resendKey || '',
-            'X-Email-From':  s.emailFrom || '',
             'Content-Type':  'application/json',
           }, s.workerSecret ? { 'X-Worker-Secret': s.workerSecret } : {}),
           body: JSON.stringify({
@@ -3213,10 +3209,8 @@ function renderReminderList(weekFilter) {
 
 function _sendWeekReminders() {
   var s = getBreezeSettings();
-  if (!_embedded && (!s.resendKey || !s.emailFrom)) {
-    alert('Please configure your Resend API key and From address in the Settings tab first.');
-    return;
-  }
+  // Resend config now lives in env on the Worker; server returns a clear
+  // error if RESEND_API_KEY / EMAIL_FROM are missing.
   var people = getPeople();
   var pMap = {};
   people.forEach(function(p){ pMap[p.id] = p; });
@@ -3321,8 +3315,6 @@ function _sendWeekReminders() {
         return fetch(s.workerUrl + '/email/send', {
           method: 'POST',
           headers: Object.assign({
-            'X-Resend-Key': s.resendKey || '',
-            'X-Email-From': s.emailFrom || '',
             'Content-Type': 'application/json',
           }, s.workerSecret ? { 'X-Worker-Secret': s.workerSecret } : {}),
           body: JSON.stringify({
@@ -3746,10 +3738,8 @@ function buildVolunteerRequestHtml(person, slot, replyTo) {
 
 function sendVolunteerNotifications() {
   var s = getBreezeSettings();
-  if (!_embedded && (!s.resendKey || !s.emailFrom)) {
-    alert('Please configure your Resend API key and From address in the Settings tab first.');
-    return;
-  }
+  // Resend config now lives in env on the Worker; server returns a clear
+  // error if RESEND_API_KEY / EMAIL_FROM are missing.
   var notifyWeekISO = document.getElementById('notify-week-filter').value;
   // Use the cache that the panel was rendered from. data-slot-idx values
   // index into _notifySlotsCache, not a fresh getOpenSlots() result — those
@@ -3806,8 +3796,6 @@ function sendVolunteerNotifications() {
       return fetch(s.workerUrl + '/email/send', {
         method: 'POST',
         headers: Object.assign({
-          'X-Resend-Key':  s.resendKey || '',
-          'X-Email-From':  s.emailFrom || '',
           'Content-Type':  'application/json',
         }, s.workerSecret ? { 'X-Worker-Secret': s.workerSecret } : {}),
         body: JSON.stringify({
@@ -3891,13 +3879,17 @@ document.getElementById('notify-week-filter').addEventListener('change', functio
 // ══════════════════════════════════════════════════════════════════
 function loadSettingsForm() {
   var s = getBreezeSettings();
+  // Clear any stale Resend key / From address from localStorage. Both now
+  // live in env on the Worker; keeping them around just hides outages.
+  if (s.resendKey || s.emailFrom) {
+    delete s.resendKey; delete s.emailFrom;
+    try { saveBreezeSettings(s); } catch(e) {}
+  }
   if (s.subdomain)  document.getElementById('breeze-subdomain').value  = s.subdomain;
   if (s.apiKey)     document.getElementById('breeze-apikey').value     = s.apiKey;
   if (s.workerUrl)  document.getElementById('breeze-worker-url').value = s.workerUrl;
   var tagIds = (s.tagIds || []).join(', ');
   if (tagIds) document.getElementById('breeze-tag-ids').value = tagIds;
-  if (s.resendKey)     document.getElementById('email-resend-key').value     = s.resendKey;
-  if (s.emailFrom)     document.getElementById('email-from').value            = s.emailFrom;
   if (s.replyTo)       document.getElementById('email-reply-to').value        = s.replyTo;
   if (s.workerSecret)  document.getElementById('breeze-worker-secret').value  = s.workerSecret;
 }
@@ -3909,8 +3901,9 @@ document.getElementById('btn-save-settings').addEventListener('click', function(
   var workerSecret  = document.getElementById('breeze-worker-secret').value.trim();
   var tagIds    = document.getElementById('breeze-tag-ids').value
                     .split(',').map(function(t){ return t.trim().replace(/\\D/g,''); }).filter(Boolean);
-  var resendKey = document.getElementById('email-resend-key').value.trim();
-  var emailFrom = document.getElementById('email-from').value.trim();
+  // Resend key + From address now live in env; only Reply-To is user-tweakable here.
+  var resendKey = '';
+  var emailFrom = '';
   var replyTo   = document.getElementById('email-reply-to').value.trim();
   if (!subdomain) { showAlert('settings-alert','Please enter your Breeze subdomain.','warning'); return; }
   saveBreezeSettings({ subdomain:subdomain, apiKey:apiKey, workerUrl:workerUrl, workerSecret:workerSecret, tagIds:tagIds, resendKey:resendKey, emailFrom:emailFrom, replyTo:replyTo });
