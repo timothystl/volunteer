@@ -63,6 +63,32 @@ All secrets are stored as Cloudflare Worker secrets (`wrangler secret put <NAME>
 
 ---
 
+## Optional Secrets
+
+These are not required for the app to function but unlock additional capabilities.
+
+### `USPS_CLIENT_ID` + `USPS_CLIENT_SECRET`
+- **Purpose**: USPS OAuth 2.0 address validation. Without these (or `USPS_USER_ID`/`LOB_API_KEY`), address validation falls back to the free Census Bureau geocoder, which is unreliable and often returns false positives.
+- **Provision**: Register at https://developer.usps.com → create an app with the **Addresses (3.0)** API → copy Consumer Key and Consumer Secret.
+- **Set**: `wrangler secret put USPS_CLIENT_ID` then `wrangler secret put USPS_CLIENT_SECRET`.
+- **Risk if leaked**: Free-tier abuse of the church's USPS quota.
+
+### `USPS_USER_ID`
+- **Purpose**: USPS Web Tools (legacy) — only used as a fallback if OAuth credentials are absent.
+- **Provision**: https://www.usps.com/business/web-tools-apis/ (legacy registration; new signups disabled).
+- **Set**: `wrangler secret put USPS_USER_ID`.
+
+### `LOB_API_KEY`
+- **Purpose**: Lob address verification — secondary fallback if no USPS credentials present.
+- **Provision**: https://dashboard.lob.com → API Keys → live secret key.
+- **Set**: `wrangler secret put LOB_API_KEY`.
+
+### `REPLY_TO_EMAIL`
+- **Purpose**: Overrides the `office@timothystl.org` default used in Resend `reply_to` for scheduler and ChMS emails.
+- **Set**: `wrangler secret put REPLY_TO_EMAIL`.
+
+---
+
 ## Bindings (not secrets — configured in `wrangler.toml`)
 
 | Binding | Type | Resource | Purpose |

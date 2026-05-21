@@ -929,12 +929,9 @@ function savePvTags() {
     if (el.dataset.picked === '1') ids.push(parseInt(el.dataset.tid));
   });
   api('/admin/api/people/'+_currentPvPerson.id, {
-    method: 'PUT',
+    method: 'PATCH',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(Object.assign({}, _currentPvPerson, {
-      tag_ids: ids,
-      household_id: _currentPvPerson.household_id || null
-    }))
+    body: JSON.stringify({ tag_ids: ids })
   }).then(function(r) {
     if (r.error) { alert('Error: '+r.error); return; }
     // Update local tags and re-render display
@@ -1435,10 +1432,9 @@ function searchAddToHh(q) {
 function confirmAddToHh(personId) {
   var p = _addToHhPeople[personId];
   if (!p) return;
-  var tagIds = (p.tags||[]).map(function(t){ return t.id; });
   api('/admin/api/people/'+personId, {
-    method: 'PUT', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(Object.assign({}, p, { household_id: _addToHhId, tag_ids: tagIds }))
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ household_id: _addToHhId })
   }).then(function(r) {
     if (r.ok) {
       closeModal('add-to-hh-modal');
@@ -2123,9 +2119,10 @@ function validatePersonAddress() {
             : dpv === 'D' ? '<span style="color:#e67e22;">&#9888; Primary confirmed — secondary not matched</span>'
             : '<span style="color:var(--danger);">&#10005; Address not found by USPS</span>';
     if (status) status.innerHTML = msg;
-  }).catch(function() {
+  }).catch(function(err) {
     if (btn) btn.disabled = false;
-    if (status) status.innerHTML = '<span style="color:var(--danger);">Request failed — try again.</span>';
+    var msg = err && err.message ? err.message : 'Request failed';
+    if (status) status.innerHTML = '<span style="color:var(--danger);">' + esc(msg) + ' — try again, or ask the admin to configure USPS API keys.</span>';
   });
 }
 
@@ -2164,9 +2161,10 @@ function validateContactAddress() {
             : dpv === 'D' ? '<span style="color:#e67e22;">&#9888; Primary confirmed — secondary not matched</span>'
             : '<span style="color:var(--danger);">&#10005; Address not found by USPS</span>';
     if (status) status.innerHTML = msg;
-  }).catch(function() {
+  }).catch(function(err) {
     if (btn) btn.disabled = false;
-    if (status) status.innerHTML = '<span style="color:var(--danger);">Request failed — try again.</span>';
+    var msg = err && err.message ? err.message : 'Request failed';
+    if (status) status.innerHTML = '<span style="color:var(--danger);">' + esc(msg) + ' — try again, or ask the admin to configure USPS API keys.</span>';
   });
 }
 
