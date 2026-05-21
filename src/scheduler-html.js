@@ -739,17 +739,17 @@ body.embedded #app-content { display:block!important; }
           </div>
           <div style="display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;font-size:0.85rem;align-items:center;">
             <span style="color:var(--warm-gray);">Breeze subdomain</span>
-            <span id="sdisp-subdomain" style="font-family:monospace;color:var(--steel-anchor);"></span>
+            <span id="sdisp-subdomain" style="font-family:monospace;color:var(--steel-anchor);">…</span>
             <span style="color:var(--warm-gray);">Breeze API key</span>
-            <span style="color:#2e7d32;font-weight:600;">&#128274; configured on server</span>
+            <span id="sdisp-breezekey" style="font-weight:600;">…</span>
             <span style="color:var(--warm-gray);">Worker URL</span>
-            <span id="sdisp-workerurl" style="font-family:monospace;font-size:0.82rem;color:var(--steel-anchor);"></span>
+            <span id="sdisp-workerurl" style="font-family:monospace;font-size:0.82rem;color:var(--steel-anchor);">…</span>
             <span style="color:var(--warm-gray);">Worker secret</span>
-            <span style="color:#2e7d32;font-weight:600;">&#128274; configured on server</span>
+            <span id="sdisp-workersecret" style="font-weight:600;">…</span>
             <span style="color:var(--warm-gray);">Resend API key</span>
-            <span style="color:#2e7d32;font-weight:600;">&#128274; configured on server</span>
+            <span id="sdisp-resendkey" style="font-weight:600;">…</span>
             <span style="color:var(--warm-gray);">From address</span>
-            <span id="sdisp-emailfrom" style="font-family:monospace;color:var(--steel-anchor);"></span>
+            <span id="sdisp-emailfrom" style="font-family:monospace;color:var(--steel-anchor);">…</span>
           </div>
         </div>
 
