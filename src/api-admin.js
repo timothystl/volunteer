@@ -87,6 +87,11 @@ export async function handleSchedulerDataApi(req, env, url, method) {
       workerUrl: new URL(req.url).origin,
       tagIds,
       replyTo: replyRow?.value || '',
+      // Presence flags so the scheduler UI can render accurate
+      // "configured / not configured" state instead of hardcoded labels.
+      hasBreezeApiKey:  !!env.BREEZE_API_KEY,
+      hasResendKey:     !!env.RESEND_API_KEY,
+      hasWorkerSecret:  !!env.WORKER_SECRET,
     });
   }
 
