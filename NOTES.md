@@ -130,6 +130,9 @@ Added 2026-04-15, phased 2026-04-15.
 ## Recent Changes (newest first)
 
 ### 2026-05-21
+- **v227**: Fix scheduler reminder emails returning 401. v184 had made `env.RESEND_API_KEY` win over the `X-Resend-Key` header at `/email/send`, so the key saved in the scheduler UI was being ignored. If the env key was unset, expired, or registered to a different sender domain than Resend had verified, scheduler emails got rejected even though the UI had a working key. Reverted `/email/send` to header-first, env-fallback. Cron birthday/anniversary paths in api-emails.js still use env directly so v184's consolidation goal stays intact for them.
+
+### 2026-05-21 (earlier)
 - **v226**: AU1 — forgot-password flow. New `email` column on `app_users` (migration 0008 + runtime). Login page has a "Forgot password?" link that toggles an inline form (username or email). `POST /admin/forgot-password` always returns 200 to prevent account enumeration; rate-limited 5/15min per IP via `RSVP_STORE`. 32-byte hex tokens stored with 1-hour TTL. Branded reset email via Resend points at `/admin/reset?token=...`. Reset page validates the token, requires matching new passwords (≥8 chars), updates `password_hash`, deletes the token. Settings → Users gains an Email column and an Email field in create/edit. Need: `RESEND_API_KEY` + `EMAIL_FROM` already configured; admins should backfill emails on existing user accounts.
 
 ### 2026-05-20
