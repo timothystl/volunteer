@@ -567,6 +567,8 @@ async function _doInitDb(db) {
     )`,
     // Speed up giving sync dedup, orphan cleanup, and reconcile-diagnose lookups.
     'CREATE INDEX IF NOT EXISTS idx_giving_breeze ON giving_entries(breeze_id)',
+    // AU1: email column on app_users for password reset flow.
+    'ALTER TABLE app_users ADD COLUMN email TEXT NOT NULL DEFAULT ""',
   ];
   for (const m of migrations) {
     try { await db.prepare(m).run(); } catch(e) { /* column already exists */ }

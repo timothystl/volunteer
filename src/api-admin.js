@@ -232,7 +232,7 @@ export async function handleAdminApi(req, env, url, method) {
     // GET /admin/api/users — list all users
     if (seg === 'users' && method === 'GET') {
       const rows = (await env.DB.prepare(
-        `SELECT id, username, display_name, role, active, created_at, last_login FROM app_users ORDER BY username`
+        `SELECT id, username, display_name, email, role, active, created_at, last_login FROM app_users ORDER BY username`
       ).all()).results || [];
       return json({ users: rows });
     }
@@ -245,12 +245,14 @@ export async function handleAdminApi(req, env, url, method) {
       if (!b.password || b.password.length < 8) return json({ error: 'Password must be at least 8 characters' }, 400);
       const validRoles = ['admin', 'finance', 'staff', 'member'];
       const role = validRoles.includes(b.role) ? b.role : 'staff';
+      const email = (b.email || '').trim().toLowerCase();
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Invalid email address' }, 400);
       const existing = await env.DB.prepare(`SELECT id FROM app_users WHERE LOWER(username)=?`).bind(username).first();
       if (existing) return json({ error: 'Username already exists' }, 409);
       const hash = await hashPassword(b.password);
       const r = await env.DB.prepare(
-        `INSERT INTO app_users (username, password_hash, display_name, role) VALUES (?,?,?,?)`
-      ).bind(username, hash, b.display_name || '', role).run();
+        `INSERT INTO app_users (username, password_hash, display_name, email, role) VALUES (?,?,?,?,?)`
+      ).bind(username, hash, b.display_name || '', email, role).run();
       return json({ ok: true, id: r.meta?.last_row_id });
     }
 
@@ -265,6 +267,11 @@ export async function handleAdminApi(req, env, url, method) {
       const fields = [];
       const vals = [];
       if (b.display_name !== undefined) { fields.push('display_name=?'); vals.push(b.display_name || ''); }
+      if (b.email !== undefined) {
+        const email = (b.email || '').trim().toLowerCase();
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'Invalid email address' }, 400);
+        fields.push('email=?'); vals.push(email);
+      }
       if (role)                          { fields.push('role=?');         vals.push(role); }
       if (b.active !== undefined)        { fields.push('active=?');       vals.push(b.active ? 1 : 0); }
       if (b.password) {
@@ -544,5 +551,140 @@ export async function handleAdminApi(req, env, url, method) {
   }
 
   return json({ error: 'Not found' }, 404);
+}
+
+// ── Forgot password / reset (public) ─────────────────────────────────────────
+
+function _randHex(bytes) {
+  const a = new Uint8Array(bytes);
+  crypto.getRandomValues(a);
+  return Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function _sendResetEmail(env, to, displayName, resetUrl) {
+  const key = env.RESEND_API_KEY || '';
+  const from = env.EMAIL_FROM || '';
+  if (!key || !from) return { ok: false, error: 'Resend not configured' };
+  const safeName = String(displayName || '').replace(/[&<>"]/g, '');
+  const text = `Hi ${safeName || 'there'},\n\nA password reset was requested for your TLC Gather account. ` +
+    `Click the link below to set a new password. This link expires in 1 hour.\n\n${resetUrl}\n\n` +
+    `If you didn't request this, ignore this email — your password won't change.\n\n— Timothy Lutheran Church`;
+  const htmlBody = `<!DOCTYPE html><html><body style="font-family:Georgia,serif;background:#FAF7F0;margin:0;padding:32px 16px;">
+    <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:40px 32px;border:1px solid #E8E0D0;">
+      <p style="font-size:1.1rem;color:#0A3C5C;font-weight:600;">Reset your TLC Gather password</p>
+      <p style="color:#3D3530;line-height:1.6;">Hi ${safeName || 'there'},</p>
+      <p style="color:#3D3530;line-height:1.6;">A password reset was requested for your account. Click the button below to set a new password. This link expires in 1 hour.</p>
+      <p style="margin:24px 0;"><a href="${resetUrl}" style="display:inline-block;background:#1E2D4A;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Reset password</a></p>
+      <p style="color:#7A6E60;font-size:.85rem;">If you didn't request this, ignore this email — your password won't change.</p>
+      <p style="color:#7A6E60;font-size:.8rem;margin-top:24px;border-top:1px solid #E8E0D0;padding-top:16px;">Timothy Lutheran Church &middot; 6704 Fyler Ave, St. Louis, MO 63139</p>
+    </div></body></html>`;
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, subject: 'Reset your TLC Gather password', text, html: htmlBody,
+        reply_to: env.REPLY_TO_EMAIL || 'office@timothystl.org' }),
+    });
+    if (res.ok) return { ok: true };
+    const data = await res.json().catch(() => ({}));
+    return { ok: false, error: data.message || String(res.status) };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+
+// POST /admin/forgot-password — form-encoded {username}. Always returns 200 so
+// attackers can't enumerate accounts. Caller (login page) shows a generic
+// "if an account exists, an email was sent" message regardless.
+export async function handleForgotPassword(req, env) {
+  if (!env.RSVP_STORE) return json({ ok: true });
+  let body = ''; try { body = await req.text(); } catch {}
+  const params = new URLSearchParams(body);
+  const ident = (params.get('username') || '').trim().toLowerCase();
+  const ip = req.headers.get('CF-Connecting-IP') || 'unknown';
+  const rlKey = `pw_reset_rl:${ip}`;
+  const cur = parseInt(await env.RSVP_STORE.get(rlKey) || '0', 10);
+  if (cur >= 5) return json({ ok: true });
+  await env.RSVP_STORE.put(rlKey, String(cur + 1), { expirationTtl: 15 * 60 });
+
+  if (!ident) return json({ ok: true });
+  const u = await env.DB.prepare(
+    `SELECT id, username, display_name, email, active FROM app_users
+     WHERE (LOWER(username)=? OR LOWER(email)=?) AND active=1 LIMIT 1`
+  ).bind(ident, ident).first().catch(() => null);
+  if (!u || !u.email) return json({ ok: true });
+
+  const token = _randHex(32);
+  await env.RSVP_STORE.put(`pw_reset:${token}`, JSON.stringify({
+    user_id: u.id, username: u.username, ts: Date.now(),
+  }), { expirationTtl: 3600 });
+  const url = new URL(req.url);
+  const resetUrl = `${url.origin}/admin/reset?token=${token}`;
+  await _sendResetEmail(env, u.email, u.display_name || u.username, resetUrl).catch(() => {});
+  return json({ ok: true });
+}
+
+// GET /admin/reset?token=... — serves the password-reset form.
+// POST /admin/reset — form-encoded {token, password, password2}; updates DB.
+export async function handleResetPassword(req, env, url) {
+  const page = (title, inner) => html(
+    `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>${title} — TLC Gather</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>:root{--navy:#1E2D4A;--teal:#2E7EA6;--gold:#C9973A;--cream:#F8F4EE;--muted:#8A8898;}
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:'DM Sans',sans-serif;background:var(--cream);display:flex;align-items:center;justify-content:center;min-height:100vh;}
+      .card{background:#fff;border-radius:16px;padding:2.5rem;max-width:380px;width:100%;box-shadow:0 4px 24px rgba(30,45,74,.12);}
+      .wm-display{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:2.6rem;color:var(--navy);text-align:center;margin-bottom:.5rem;}
+      .wm-sub{font-size:10px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);text-align:center;margin-bottom:1.75rem;}
+      .field{margin-bottom:1rem;} label{display:block;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.2em;color:var(--navy);margin-bottom:.4rem;}
+      input{width:100%;padding:.7rem 1rem;border:1.5px solid rgba(30,45,74,.2);border-radius:8px;font-size:.95rem;font-family:inherit;outline:none;}
+      input:focus{border-color:var(--teal);}
+      .btn{width:100%;background:var(--navy);color:#fff;border:none;padding:.85rem;border-radius:8px;font-size:1rem;font-weight:500;cursor:pointer;margin-top:.5rem;}
+      .btn:hover{background:var(--teal);} .btn:disabled{opacity:.6;cursor:wait;}
+      .msg{padding:.75rem 1rem;border-radius:8px;margin-bottom:1rem;font-size:.9rem;}
+      .msg.err{background:#fceae8;color:#c0392b;} .msg.ok{background:#e8f6ed;color:#1d6b3a;}
+      a{color:var(--teal);font-size:.85rem;text-decoration:none;} a:hover{text-decoration:underline;}
+    </style></head><body><div class="card">
+      <div class="wm-display">Gather</div>
+      <div class="wm-sub">Reset password</div>
+      ${inner}
+      <div style="text-align:center;margin-top:1rem;"><a href="/chms">Back to sign in</a></div>
+    </div></body></html>`);
+
+  if (req.method === 'GET') {
+    const token = url.searchParams.get('token') || '';
+    if (!token) return page('Reset', `<div class="msg err">No reset token provided.</div>`);
+    if (!env.RSVP_STORE) return page('Reset', `<div class="msg err">Reset is unavailable.</div>`);
+    const raw = await env.RSVP_STORE.get(`pw_reset:${token}`);
+    if (!raw) return page('Reset', `<div class="msg err">This reset link has expired or is invalid.</div>`);
+    return page('Reset', `<form method="POST" action="/admin/reset" onsubmit="var b=this.querySelector('.btn');b.disabled=true;b.textContent='Saving…';">
+      <input type="hidden" name="token" value="${token}">
+      <div class="field"><label>New password</label><input type="password" name="password" minlength="8" autofocus required></div>
+      <div class="field"><label>Confirm password</label><input type="password" name="password2" minlength="8" required></div>
+      <button class="btn" type="submit">Set new password</button>
+    </form>`);
+  }
+
+  if (req.method === 'POST') {
+    let body = ''; try { body = await req.text(); } catch {}
+    const params = new URLSearchParams(body);
+    const token = (params.get('token') || '').trim();
+    const password = params.get('password') || '';
+    const password2 = params.get('password2') || '';
+    if (!token) return page('Reset', `<div class="msg err">Missing token.</div>`);
+    if (password.length < 8) return page('Reset', `<div class="msg err">Password must be at least 8 characters.</div>`);
+    if (password !== password2) return page('Reset', `<div class="msg err">Passwords do not match.</div>`);
+    if (!env.RSVP_STORE) return page('Reset', `<div class="msg err">Reset is unavailable.</div>`);
+    const raw = await env.RSVP_STORE.get(`pw_reset:${token}`);
+    if (!raw) return page('Reset', `<div class="msg err">This reset link has expired or is invalid.</div>`);
+    let rec; try { rec = JSON.parse(raw); } catch { return page('Reset', `<div class="msg err">Invalid token.</div>`); }
+    if (!rec.user_id) return page('Reset', `<div class="msg err">Invalid token.</div>`);
+    const hash = await hashPassword(password);
+    await env.DB.prepare(`UPDATE app_users SET password_hash=? WHERE id=?`).bind(hash, rec.user_id).run();
+    await env.RSVP_STORE.delete(`pw_reset:${token}`).catch(() => {});
+    return page('Reset', `<div class="msg ok">Password updated. <a href="/chms">Sign in</a> with your new password.</div>`);
+  }
+
+  return page('Reset', `<div class="msg err">Method not allowed.</div>`);
 }
 

@@ -71,6 +71,7 @@ function renderUsersList() {
     + '<thead><tr style="border-bottom:1px solid var(--border);">'
     + '<th style="text-align:left;padding:6px 8px;font-size:.72rem;color:var(--warm-gray);font-weight:700;text-transform:uppercase;">Username</th>'
     + '<th style="text-align:left;padding:6px 8px;font-size:.72rem;color:var(--warm-gray);font-weight:700;text-transform:uppercase;">Display Name</th>'
+    + '<th style="text-align:left;padding:6px 8px;font-size:.72rem;color:var(--warm-gray);font-weight:700;text-transform:uppercase;">Email</th>'
     + '<th style="text-align:left;padding:6px 8px;font-size:.72rem;color:var(--warm-gray);font-weight:700;text-transform:uppercase;">Role</th>'
     + '<th style="text-align:left;padding:6px 8px;font-size:.72rem;color:var(--warm-gray);font-weight:700;text-transform:uppercase;">Status</th>'
     + '<th style="padding:6px 8px;"></th>'
@@ -83,6 +84,7 @@ function renderUsersList() {
         return '<tr style="border-bottom:1px solid var(--linen);">'
           + '<td style="padding:8px 8px;font-weight:600;">'+esc(u.username)+'</td>'
           + '<td style="padding:8px 8px;color:var(--warm-gray);">'+esc(u.display_name||'—')+'</td>'
+          + '<td style="padding:8px 8px;color:var(--warm-gray);font-size:.82rem;">'+esc(u.email||'—')+'</td>'
           + '<td style="padding:8px 8px;"><span style="font-size:.7rem;padding:2px 7px;border-radius:99px;background:'+rc+'18;color:'+rc+';font-weight:700;">'+esc(u.role)+'</span></td>'
           + '<td style="padding:8px 8px;">'+statusBadge+'</td>'
           + '<td style="padding:8px 8px;text-align:right;white-space:nowrap;">'
@@ -102,6 +104,7 @@ function openUserForm(userId) {
   document.getElementById('user-modal-body').innerHTML =
     (u ? '' : '<div class="field" style="margin-bottom:10px;"><label>Username</label><input type="text" id="um-username" placeholder="e.g. jsmith" autocomplete="off" style="'+inp+'"></div>')
     + '<div class="field" style="margin-bottom:10px;"><label>Display Name</label><input type="text" id="um-display" placeholder="e.g. Jane Smith" value="'+esc(u?u.display_name:'')+'" style="'+inp+'"></div>'
+    + '<div class="field" style="margin-bottom:10px;"><label>Email <span style="color:var(--warm-gray);font-weight:400;">(for password reset)</span></label><input type="email" id="um-email" placeholder="e.g. jane@church.org" autocomplete="off" value="'+esc(u?(u.email||''):'')+'" style="'+inp+'"></div>'
     + '<div class="field" style="margin-bottom:10px;"><label>Role</label><select id="um-role" style="'+inp+'padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.9rem;">'
     + ['admin','finance','staff','member'].map(function(r){return '<option value="'+r+'"'+(u&&u.role===r?' selected':'')+'>'+r.charAt(0).toUpperCase()+r.slice(1)+'</option>';}).join('')
     + '</select></div>'
@@ -111,10 +114,11 @@ function openUserForm(userId) {
 }
 function saveUser() {
   var display  = (document.getElementById('um-display')||{}).value || '';
+  var email    = ((document.getElementById('um-email')||{}).value || '').trim();
   var role     = (document.getElementById('um-role')||{}).value || 'staff';
   var pass     = (document.getElementById('um-password')||{}).value || '';
   var activeEl = document.getElementById('um-active');
-  var payload  = { display_name: display, role: role };
+  var payload  = { display_name: display, email: email, role: role };
   if (pass) payload.password = pass;
   if (activeEl) payload.active = activeEl.checked;
   if (!_editingUserId) {
