@@ -3387,18 +3387,18 @@ function syncConfirmations(silent) {
   var s = getBreezeSettings();
   if (!_embedded && !s.workerUrl) {
     if (!silent) alert('Configure your Worker URL in the Settings tab first.');
-    return;
+    return Promise.resolve();
   }
   var rsvpTokens = getRsvpTokens();                   // { pid: token }
   var tokenList  = Object.keys(rsvpTokens).map(function(pid) { return rsvpTokens[pid]; }).filter(Boolean);
   var statusEl   = document.getElementById('email-send-status');
   if (!tokenList.length) {
     if (!silent) statusEl.textContent = 'No RSVP tokens found \\u2014 send reminder emails first.';
-    return;
+    return Promise.resolve();
   }
   if (!silent) statusEl.textContent = 'Syncing confirmations\\u2026';
 
-  fetch(s.workerUrl + '/rsvp/sync', {
+  return fetch(s.workerUrl + '/rsvp/sync', {
     method:  'POST',
     headers: Object.assign({ 'Content-Type': 'application/json' }, s.workerSecret ? { 'X-Worker-Secret': s.workerSecret } : {}),
     body:    JSON.stringify({ tokens: tokenList }),
@@ -3426,6 +3426,7 @@ function syncConfirmations(silent) {
             if (!a.dateISO) return;
             var localStatus = a.status === 'confirmed'     ? 'confirmed'
                             : a.status === 'needs_changes' ? 'needs_changes'
+                            : a.status === 'declined'      ? 'declined'
                             : 'pending';
             if (localStatus === 'pending') return; // leave pending pills alone
             // confKey uses 'shared' for both-services slots, not 'both services'
@@ -3439,6 +3440,7 @@ function syncConfirmations(silent) {
           var workerStatus = result.status;
           var localStatus  = workerStatus === 'confirmed'     ? 'confirmed'
                            : workerStatus === 'needs_changes' ? 'needs_changes'
+                           : workerStatus === 'declined'      ? 'declined'
                            : 'pending';
           if (localStatus === 'pending') return;
           currentSchedule.forEach(function(row) {
@@ -3633,7 +3635,23 @@ function openNotifyPanel() {
     alert('Generate a schedule first.');
     return;
   }
-  var slots = getOpenSlots();
+  // Auto-sync RSVPs from the Worker so declined/needs-changes responses are
+  // reflected in the eligible pool. Fall through (do not block) if sync fails
+  // or there are no tokens — the panel still works with whatever's in cache.
+  var renderAfterSync = function() {
+    var slots = getOpenSlots();
+    _renderNotifyPanelBody(slots);
+  };
+  if (typeof syncConfirmations === 'function') {
+    try {
+      var p = syncConfirmations(true);
+      if (p && typeof p.then === 'function') { p.then(renderAfterSync, renderAfterSync); return; }
+    } catch (e) { /* ignore */ }
+  }
+  renderAfterSync();
+}
+
+function _renderNotifyPanelBody(slots) {
   var listEl = document.getElementById('notify-slots-list');
   var actionsEl = document.getElementById('notify-actions');
   var alertEl = document.getElementById('notify-alert');
