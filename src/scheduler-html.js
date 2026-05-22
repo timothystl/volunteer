@@ -3570,11 +3570,39 @@ function getOpenSlots() {
   var people = getPeople();
   var confs = getConfirmations();
   var slots = [];
+
+  // Pre-pass: collect which person-IDs have declined or needs_changes on each date,
+  // across ALL roles/services. If someone said they can't make it for one slot on
+  // a Sunday, we don't ask them to fill other open slots that same Sunday.
+  var unavailableByDate = {}; // dateISO → [pid, ...]
+  currentSchedule.forEach(function(row) {
+    if (row.type !== 'sunday') return;
+    var dateISO = row.date.toISOString().slice(0, 10);
+    var addUnavailable = function(pid, status) {
+      if (!pid) return;
+      if (status !== 'declined' && status !== 'needs_changes') return;
+      if (!unavailableByDate[dateISO]) unavailableByDate[dateISO] = [];
+      if (unavailableByDate[dateISO].indexOf(pid) === -1) unavailableByDate[dateISO].push(pid);
+    };
+    PER_ROLES.forEach(function(role) {
+      if (!row.assignments[role]) return;
+      ['8am', '10:45am'].forEach(function(svc) {
+        var pid = row.assignments[role][svc];
+        addUnavailable(pid, confs[dateISO+'|'+role+'|'+svc] || '');
+      });
+    });
+    SHARED_ROLES.forEach(function(role) {
+      if (!row.assignments[role]) return;
+      addUnavailable(row.assignments[role].shared, confs[dateISO+'|'+role+'|shared'] || '');
+    });
+  });
+
   currentSchedule.forEach(function(row) {
     if (row.type !== 'sunday') return;
     var dateStr = fmtDate(row.date);
     var dateISO = row.date.toISOString().slice(0, 10);
     var ordinal = row.ordinal;
+    var unavailableToday = unavailableByDate[dateISO] || [];
     PER_ROLES.forEach(function(role) {
       if (!row.assignments[role]) return;
       ['8am', '10:45am'].forEach(function(svc) {
@@ -3584,7 +3612,7 @@ function getOpenSlots() {
         var needsReplacement = !pid || confStatus === 'declined' || confStatus === 'needs_changes';
         if (!needsReplacement) return;
         var pool = people.filter(function(p) {
-          if (p.id === pid) return false; // don't re-ask someone who already declined/needs changes
+          if (unavailableToday.indexOf(p.id) !== -1) return false; // already said can't do this Sunday
           return p.roles && p.roles.indexOf(role) !== -1 && eligibleForRequest(p, svc, dateISO);
         });
         slots.push({ date: dateStr, dateISO: dateISO, ordinal: ordinal, svc: svc, role: role, pool: pool,
@@ -3598,7 +3626,7 @@ function getOpenSlots() {
       var needsReplacement = !pid || confStatus === 'declined' || confStatus === 'needs_changes';
       if (!needsReplacement) return;
       var pool = people.filter(function(p) {
-        if (p.id === pid) return false; // don't re-ask someone who already declined/needs changes
+        if (unavailableToday.indexOf(p.id) !== -1) return false; // already said can't do this Sunday
         return p.roles && p.roles.indexOf(role) !== -1 && eligibleForRequest(p, 'shared', dateISO);
       });
       slots.push({ date: dateStr, dateISO: dateISO, ordinal: ordinal, svc: 'both services', role: role, pool: pool,
