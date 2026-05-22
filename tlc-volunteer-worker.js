@@ -15,7 +15,7 @@ import {
   handleSchedEmailSend, handleSchedRsvpStore, handleSchedRsvpSync,
   handleSchedRsvpPortal, handleSchedRsvp, handleSchedBreezeProxy,
 } from './src/api-scheduler.js';
-import { handleAdminLogin, handleAdminApi } from './src/api-admin.js';
+import { handleAdminLogin, handleAdminApi, handleForgotPassword, handleResetPassword } from './src/api-admin.js';
 import { handleIntakeApi } from './src/api-intake.js';
 import { LOGIN_HTML, PUBLIC_HTML, ADMIN_HTML } from './src/html-templates.js';
 import { CHMS_HTML, CHMS_MANIFEST_JSON, SW_JS, BACKLOG_HTML } from './src/html-chms.js';
@@ -189,6 +189,8 @@ async function _fetch(req, env) {
     }
     if (path.match(/^\/volunteer\/calendar\/\d+$/) && method === 'GET') return handleCalendar(env, path);
     if (path === '/admin/login' && method === 'POST') return handleAdminLogin(req, env);
+    if (path === '/admin/forgot-password' && method === 'POST') return handleForgotPassword(req, env);
+    if (path === '/admin/reset' && (method === 'GET' || method === 'POST')) return handleResetPassword(req, env, url);
     if (path === '/admin/logout') {
       return new Response(null, { status: 302, headers: {
         'Location': isChmsHost ? '/' : '/admin',

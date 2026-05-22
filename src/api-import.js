@@ -2423,6 +2423,15 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
   const F_BAPTISM_FIELD  = findFieldPS(['baptism date','baptismal date','date of baptism','baptized date','date baptized','baptism (date)','baptism (adult)','baptism (infant)','baptism_date','baptism','baptized'], ['baptism','baptized','baptismal']);
   // "Confirmed" is a dropdown field; "Confirmation Date" is the actual date field — only match date-specific names
   const F_CONFIRM_FIELD  = findFieldPS(['confirmation date','affirmation date','date of confirmation','date affirmed','date confirmed','date of affirmation','affirmation of baptism','confirmation (date)','confirmation_date'], ['confirmation','confirmed','affirm']);
+  // Boolean dropdown/checkbox companions (RI2).
+  const findBoolFieldPS = (substrs) => allFields.find(f => {
+    const fn = (f.name||'').toLowerCase();
+    return substrs.some(s => fn.includes(s)) && !fn.includes('date');
+  });
+  let F_BAPTIZED_BOOL_FIELD_PS  = findBoolFieldPS(['baptized','baptism']);
+  let F_CONFIRMED_BOOL_FIELD_PS = findBoolFieldPS(['confirmed','confirmation','affirmed','affirmation']);
+  if (F_BAPTIZED_BOOL_FIELD_PS && F_BAPTISM_FIELD && String(F_BAPTIZED_BOOL_FIELD_PS.id) === String(F_BAPTISM_FIELD.id))   F_BAPTIZED_BOOL_FIELD_PS  = null;
+  if (F_CONFIRMED_BOOL_FIELD_PS && F_CONFIRM_FIELD && String(F_CONFIRMED_BOOL_FIELD_PS.id) === String(F_CONFIRM_FIELD.id)) F_CONFIRMED_BOOL_FIELD_PS = null;
   const F_ANNIV_FIELD    = findFieldPS(['anniversary date','anniversary','anniversary_date','wedding anniversary','wedding date'], ['anniversary','wedding']);
   const F_GENDER_FIELD   = findFieldPS(['gender','sex','gender identity'], ['gender','sex']);
   const F_MARITAL_FIELD    = findFieldPS(['marital status','marital','marriage status','civil status','married']);
@@ -2436,6 +2445,8 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
   const F_DOB          = fieldKeyPS(F_DOB_FIELD);
   const F_BAPTISM      = fieldKeyPS(F_BAPTISM_FIELD);
   const F_CONFIRMATION = fieldKeyPS(F_CONFIRM_FIELD);
+  const F_BAPTIZED_B   = fieldKeyPS(F_BAPTIZED_BOOL_FIELD_PS);
+  const F_CONFIRMED_B  = fieldKeyPS(F_CONFIRMED_BOOL_FIELD_PS);
   const F_ANNIVERSARY  = fieldKeyPS(F_ANNIV_FIELD);
   const F_GENDER       = fieldKeyPS(F_GENDER_FIELD);
   const F_MARITAL      = fieldKeyPS(F_MARITAL_FIELD);
@@ -2476,6 +2487,10 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
     if (typeof raw === 'string' && raw) return optionIdToNamePS[raw] || raw;
     return '';
   };
+  const isYesPS = (raw) => {
+    const s = String(extractNamePS(raw) || '').trim().toLowerCase();
+    return s === 'yes' || s === 'y' || s === 'true' || s === '1' || s === 'baptized' || s === 'confirmed' || s === 'on';
+  };
 
   // Load configured member types + map for status resolution
   const mtCfgRowPS = await db.prepare("SELECT value FROM chms_config WHERE key='member_types'").first();
@@ -2491,6 +2506,8 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
   const dob             = toISOPS(p.birth_date || extractDatePS(details[F_DOB]) || extractDatePS(details['birthdate']) || '');
   const baptismDate     = toISOPS(extractDatePS(details[F_BAPTISM]) || extractDatePS(details['baptism_date']) || extractDatePS(details['baptism']) || '');
   const confirmDate     = toISOPS(extractDatePS(details[F_CONFIRMATION]) || extractDatePS(details['confirmation_date']) || extractDatePS(details['confirmation']) || '');
+  const baptizedFlag    = (baptismDate || (F_BAPTIZED_B  && isYesPS(details[F_BAPTIZED_B])))  ? 1 : 0;
+  const confirmedFlag   = (confirmDate || (F_CONFIRMED_B && isYesPS(details[F_CONFIRMED_B]))) ? 1 : 0;
   const anniversaryDate = toISOPS(extractDatePS(details[F_ANNIVERSARY]) || extractDatePS(details['anniversary_date']) || extractDatePS(details['anniversary']) || '');
   const gender          = (F_GENDER  ? extractNamePS(details[F_GENDER])  : '') || extractNamePS(details['gender'])  || extractNamePS(details['sex']) || '';
   const maritalStatus   = (F_MARITAL ? extractNamePS(details[F_MARITAL]) : '') || extractNamePS(details['marital_status']) || extractNamePS(details['marital']) || '';
@@ -2602,9 +2619,9 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
      household_id      = CASE WHEN ? IS NOT NULL THEN ? ELSE household_id END,
      dob               = CASE WHEN ? != '' THEN ? ELSE dob               END,
      baptism_date      = CASE WHEN ? != '' THEN ? ELSE baptism_date      END,
-     baptized          = CASE WHEN ? != '' THEN 1 ELSE baptized          END,
+     baptized          = CASE WHEN ? = 1 THEN 1 ELSE baptized          END,
      confirmation_date = CASE WHEN ? != '' THEN ? ELSE confirmation_date END,
-     confirmed         = CASE WHEN ? != '' THEN 1 ELSE confirmed         END,
+     confirmed         = CASE WHEN ? = 1 THEN 1 ELSE confirmed         END,
      anniversary_date  = CASE WHEN ? != '' THEN ? ELSE anniversary_date  END,
      gender            = CASE WHEN ? != '' THEN ? ELSE gender            END,
      marital_status    = CASE WHEN ? != '' THEN ? ELSE marital_status    END,
@@ -2622,7 +2639,7 @@ if (seg === 'import/breeze-sync-person' && method === 'POST') { try {
     fn,fn, ln,ln, email,email, phone,phone,
     addr.street,addr.street, addr.city,addr.city, addr.state,addr.state, addr.zip,addr.zip,
     memberType,memberType, familyRole,familyRole, householdId,householdId,
-    dob,dob, baptismDate,baptismDate,baptismDate, confirmDate,confirmDate,confirmDate, anniversaryDate,anniversaryDate,
+    dob,dob, baptismDate,baptismDate,baptizedFlag, confirmDate,confirmDate,confirmedFlag, anniversaryDate,anniversaryDate,
     gender,gender, maritalStatus,maritalStatus, photoUrl,photoUrl,
     deceasedFlag, deathDate,deathDate, envelopeNumber,envelopeNumber,
     breezeId
@@ -2712,6 +2729,17 @@ if (seg === 'import/breeze' && method === 'POST') { try {
   const F_BAPTISM_FIELD  = findField(['baptism date','baptismal date','date of baptism','baptized date','date baptized','baptism (date)','baptism (adult)','baptism (infant)','baptism_date','baptism','baptized'], ['baptism','baptized','baptismal']);
   // "Confirmed" is a dropdown; "Confirmation Date" is the date — only match date-specific names exactly
   const F_CONFIRM_FIELD  = findField(['confirmation date','affirmation date','date of confirmation','date affirmed','date confirmed','date of affirmation','affirmation of baptism','confirmation (date)','confirmation_date'], ['confirmation','confirmed','affirm']);
+  // Boolean dropdown/checkbox variants (RI2). Many Breeze instances split the
+  // sacrament into a date field + a yes/no field — we want the flag set when
+  // either is populated.
+  const findBoolField = (substrs) => allFields.find(f => {
+    const fn = (f.name||'').toLowerCase();
+    return substrs.some(s => fn.includes(s)) && !fn.includes('date');
+  });
+  let F_BAPTIZED_BOOL_FIELD  = findBoolField(['baptized','baptism']);
+  let F_CONFIRMED_BOOL_FIELD = findBoolField(['confirmed','confirmation','affirmed','affirmation']);
+  if (F_BAPTIZED_BOOL_FIELD && F_BAPTISM_FIELD && String(F_BAPTIZED_BOOL_FIELD.id) === String(F_BAPTISM_FIELD.id))   F_BAPTIZED_BOOL_FIELD  = null;
+  if (F_CONFIRMED_BOOL_FIELD && F_CONFIRM_FIELD && String(F_CONFIRMED_BOOL_FIELD.id) === String(F_CONFIRM_FIELD.id)) F_CONFIRMED_BOOL_FIELD = null;
   const F_ANNIV_FIELD    = findField(['anniversary date','anniversary','anniversary_date','wedding anniversary','wedding date'], ['anniversary','wedding']);
   // Gender needs substring fallback — some Breeze instances label it "M/F", "Sex", etc.
   const F_GENDER_FIELD   = findField(['gender','sex','gender identity'], ['gender','sex']);
@@ -2726,6 +2754,8 @@ if (seg === 'import/breeze' && method === 'POST') { try {
   const F_DOB          = fk(F_DOB_FIELD);
   const F_BAPTISM      = fk(F_BAPTISM_FIELD);
   const F_CONFIRMATION = fk(F_CONFIRM_FIELD);
+  const F_BAPTIZED_B   = fk(F_BAPTIZED_BOOL_FIELD);
+  const F_CONFIRMED_B  = fk(F_CONFIRMED_BOOL_FIELD);
   const F_ANNIVERSARY  = fk(F_ANNIV_FIELD);
   const F_GENDER       = fk(F_GENDER_FIELD);
   const F_MARITAL      = fk(F_MARITAL_FIELD);
@@ -2802,6 +2832,12 @@ if (seg === 'import/breeze' && method === 'POST') { try {
     if (obj && typeof obj === 'object') return obj.name || obj.value || '';
     if (typeof raw === 'string' && raw) return optionIdToName[raw] || raw;
     return '';
+  };
+  // Returns true if a Breeze field value represents an affirmative answer
+  // (dropdown "Yes", checkbox "1"/"true", etc.).
+  const isYes = (raw) => {
+    const s = String(extractName(raw) || '').trim().toLowerCase();
+    return s === 'yes' || s === 'y' || s === 'true' || s === '1' || s === 'baptized' || s === 'confirmed' || s === 'on';
   };
   // No statuses are skipped — all Breeze records are imported regardless of status.
   const SKIP_STATUSES = new Set();
@@ -2880,6 +2916,8 @@ if (seg === 'import/breeze' && method === 'POST') { try {
       const dob             = toISO(p.birth_date || extractDate(details[F_DOB]) || extractDate(details['birthdate']) || '');
       const baptismDate     = toISO(extractDate(details[F_BAPTISM])       || extractDate(details['baptism_date'])     || extractDate(details['baptism'])     || '');
       const confirmDate     = toISO(extractDate(details[F_CONFIRMATION])  || extractDate(details['confirmation_date'])|| extractDate(details['confirmation']) || '');
+      const baptizedFlag    = (baptismDate || (F_BAPTIZED_B   && isYes(details[F_BAPTIZED_B])))  ? 1 : 0;
+      const confirmedFlag   = (confirmDate || (F_CONFIRMED_B  && isYes(details[F_CONFIRMED_B]))) ? 1 : 0;
       const anniversaryDate = toISO(extractDate(details[F_ANNIVERSARY])   || extractDate(details['anniversary_date']) || extractDate(details['anniversary'])  || '');
       // Deceased flag and death date — Breeze may store as a checkbox field or date field.
       // Also check p.deceased top-level if Breeze exposes it directly.
@@ -2993,9 +3031,9 @@ if (seg === 'import/breeze' && method === 'POST') { try {
            household_id=?,
            dob               = CASE WHEN locally_edited=1 THEN dob               ELSE COALESCE(NULLIF(?,''),dob) END,
            baptism_date      = CASE WHEN locally_edited=1 THEN baptism_date      ELSE COALESCE(NULLIF(?,''),baptism_date) END,
-           baptized=CASE WHEN ?!='' THEN 1 ELSE baptized END,
+           baptized=CASE WHEN ?=1 THEN 1 ELSE baptized END,
            confirmation_date = CASE WHEN locally_edited=1 THEN confirmation_date ELSE COALESCE(NULLIF(?,''),confirmation_date) END,
-           confirmed=CASE WHEN ?!='' THEN 1 ELSE confirmed END,
+           confirmed=CASE WHEN ?=1 THEN 1 ELSE confirmed END,
            anniversary_date  = CASE WHEN locally_edited=1 THEN anniversary_date  ELSE COALESCE(NULLIF(?,''),anniversary_date) END,
            family_role=?,
            photo_url=CASE
@@ -3010,7 +3048,7 @@ if (seg === 'import/breeze' && method === 'POST') { try {
            active=1
            WHERE breeze_id=?`
         ).bind(fn,ln,email,phone,addr.street,addr.city,addr.state,addr.zip,memberType,householdId,
-               dob,baptismDate,baptismDate,confirmDate,confirmDate,anniversaryDate,familyRole,
+               dob,baptismDate,baptizedFlag,confirmDate,confirmedFlag,anniversaryDate,familyRole,
                photoUrl,gender,maritalStatus,deceasedFlag,deathDate,envelopeNumber,String(p.id)).run();
         updated++;
       } else {
@@ -3021,7 +3059,7 @@ if (seg === 'import/breeze' && method === 'POST') { try {
             gender,marital_status,deceased,death_date,envelope_number)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         ).bind(fn,ln,email,phone,addr.street,addr.city,addr.state,addr.zip,String(p.id),memberType,
-               householdId,dob,baptismDate,baptismDate?1:0,confirmDate,confirmDate?1:0,anniversaryDate,familyRole,photoUrl,
+               householdId,dob,baptismDate,baptizedFlag,confirmDate,confirmedFlag,anniversaryDate,familyRole,photoUrl,
                gender,maritalStatus,deceasedFlag,deathDate,envelopeNumber).run();
         imported++;
       }

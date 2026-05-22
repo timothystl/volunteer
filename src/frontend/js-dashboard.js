@@ -675,9 +675,9 @@ function openAddFollowUp(pid, name, type) {
 function markSeenToday(personId) {
   var today = new Date().toISOString().slice(0,10);
   api('/admin/api/people/'+personId, {
-    method: 'PUT',
+    method: 'PATCH',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify(Object.assign({}, _currentPvPerson, {last_seen_date: today}))
+    body: JSON.stringify({last_seen_date: today})
   }).then(function(r) {
     if (r && r.ok) {
       var el = document.getElementById('pv-last-seen');
