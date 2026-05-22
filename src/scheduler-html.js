@@ -1733,6 +1733,14 @@ function eligible(person, ordinal, svc, dateISO, role) {
   if (isOnAbsence(person, dateISO)) return false;
   return true;
 }
+// For volunteer request notifications: ignore preferred-Sunday preference — ask
+// everyone with the role (except blackout dates and service preference still apply).
+function eligibleForRequest(person, svc, dateISO) {
+  if (svc !== 'shared' && person.servicePreference !== 'both' && person.servicePreference !== svc) return false;
+  if (dateISO && person.blackoutDates && person.blackoutDates.indexOf(dateISO) !== -1) return false;
+  if (isOnAbsence(person, dateISO)) return false;
+  return true;
+}
 function pickBest(pool, counts) {
   if (!pool.length) return null;
   pool.sort(function(a,b){ return (counts[a.id]||0)-(counts[b.id]||0); });
@@ -3571,23 +3579,30 @@ function getOpenSlots() {
       if (!row.assignments[role]) return;
       ['8am', '10:45am'].forEach(function(svc) {
         var pid = row.assignments[role][svc];
-        var declined = pid && confs[dateISO+'|'+role+'|'+svc] === 'declined';
-        if (pid && !declined) return; // filled and not declined
+        var confStatus = pid ? (confs[dateISO+'|'+role+'|'+svc] || '') : '';
+        // Slot needs a replacement if empty, or the assigned person declined/needs changes
+        var needsReplacement = !pid || confStatus === 'declined' || confStatus === 'needs_changes';
+        if (!needsReplacement) return;
         var pool = people.filter(function(p) {
-          return p.roles && p.roles.indexOf(role) !== -1 && eligible(p, ordinal, svc, dateISO, role);
+          if (p.id === pid) return false; // don't re-ask someone who already declined/needs changes
+          return p.roles && p.roles.indexOf(role) !== -1 && eligibleForRequest(p, svc, dateISO);
         });
-        slots.push({ date: dateStr, dateISO: dateISO, ordinal: ordinal, svc: svc, role: role, pool: pool, declined: declined });
+        slots.push({ date: dateStr, dateISO: dateISO, ordinal: ordinal, svc: svc, role: role, pool: pool,
+          declined: confStatus === 'declined', needsChanges: confStatus === 'needs_changes' });
       });
     });
     SHARED_ROLES.forEach(function(role) {
       if (!row.assignments[role]) return;
       var pid = row.assignments[role].shared;
-      var declined = pid && confs[dateISO+'|'+role+'|shared'] === 'declined';
-      if (pid && !declined) return; // filled and not declined
+      var confStatus = pid ? (confs[dateISO+'|'+role+'|shared'] || '') : '';
+      var needsReplacement = !pid || confStatus === 'declined' || confStatus === 'needs_changes';
+      if (!needsReplacement) return;
       var pool = people.filter(function(p) {
-        return p.roles && p.roles.indexOf(role) !== -1 && eligible(p, ordinal, 'shared', dateISO, role);
+        if (p.id === pid) return false; // don't re-ask someone who already declined/needs changes
+        return p.roles && p.roles.indexOf(role) !== -1 && eligibleForRequest(p, 'shared', dateISO);
       });
-      slots.push({ date: dateStr, dateISO: dateISO, ordinal: ordinal, svc: 'both services', role: role, pool: pool, declined: declined });
+      slots.push({ date: dateStr, dateISO: dateISO, ordinal: ordinal, svc: 'both services', role: role, pool: pool,
+        declined: confStatus === 'declined', needsChanges: confStatus === 'needs_changes' });
     });
   });
   return slots;
@@ -3705,6 +3720,7 @@ function renderNotifySlots(weekFilter) {
       + '<td style="padding:7px 8px;vertical-align:top;white-space:nowrap;">' + esc(slot.svc) + '</td>'
       + '<td style="padding:7px 8px;vertical-align:top;font-weight:600;">' + esc(roleLabel(slot.role))
       + (slot.declined ? ' <span style="font-size:0.72rem;font-weight:400;color:var(--on-error-bg);background:var(--error-bg);border:1px solid var(--error-border);border-radius:4px;padding:1px 5px;">\u2717 Declined</span>' : '')
+      + (slot.needsChanges ? ' <span style="font-size:0.72rem;font-weight:400;color:#7a5700;background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:1px 5px;">\u26a0 Needs Change</span>' : '')
       + '</td>'
       + '<td style="padding:7px 8px;vertical-align:top;font-size:0.8rem;">' + eligibleHtml + '</td>'
       + '</tr>';
