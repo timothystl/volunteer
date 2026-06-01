@@ -129,11 +129,12 @@ export async function handleChmsApi(req, env, url, method, seg, role = 'admin') 
        WHERE active=1 AND (status IS NULL OR status='active')
          AND (deceased=0 OR deceased IS NULL) AND anniversary_date != ''
          AND LOWER(member_type) = 'member'
+         AND LOWER(marital_status) != 'widowed'
          AND strftime('%m', anniversary_date) = ?
          AND NOT EXISTS (
            SELECT 1 FROM people p2
            WHERE p2.household_id=people.household_id AND p2.id!=people.id
-             AND (p2.deceased=1 OR p2.status='deceased')
+             AND (p2.deceased=1 OR p2.status='deceased') AND p2.family_role IN ('head','spouse')
          )
        ORDER BY strftime('%d', anniversary_date), household_id,
          CASE family_role WHEN 'head' THEN 0 WHEN 'spouse' THEN 1 ELSE 2 END`
@@ -175,6 +176,7 @@ export async function handleChmsApi(req, env, url, method, seg, role = 'admin') 
       }
     }
     const anniversaries = [...annGroupMap.values()]
+      .filter(group => group.length >= 2)
       .map(group => {
         group.sort((a, b) => (_annRoleOrder[a.family_role] ?? 4) - (_annRoleOrder[b.family_role] ?? 4) || a.id - b.id);
         return {

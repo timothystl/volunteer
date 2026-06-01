@@ -240,7 +240,14 @@ export async function sendAnniversaryTexts(env) {
      WHERE active=1 AND (status IS NULL OR status='active') AND (deceased=0 OR deceased IS NULL)
        AND sms_opt_in=1 AND phone != '' AND anniversary_date != ''
        AND LOWER(member_type) NOT IN ('visitor','inactive','other','organization')
+       AND LOWER(marital_status) != 'widowed'
+       AND household_id IS NOT NULL AND household_id != ''
        AND strftime('%m-%d', anniversary_date) = ?
+       AND NOT EXISTS (
+         SELECT 1 FROM people p2
+         WHERE p2.household_id=people.household_id AND p2.id!=people.id
+           AND (p2.deceased=1 OR p2.status='deceased') AND p2.family_role IN ('head','spouse')
+       )
      ORDER BY household_id, CASE family_role WHEN 'head' THEN 0 WHEN 'spouse' THEN 1 ELSE 2 END`
   ).bind(todayMMDD).all()).results || [];
   const hhMap = new Map();
@@ -256,8 +263,9 @@ export async function sendAnniversaryTexts(env) {
     const p1 = members[0];
     const dedupeKey = String(p1.household_id || p1.id);
     if (alreadySent.has(dedupeKey)) { skipped++; continue; }
-    const name2 = members.length >= 2 ? members[1].first_name : null;
-    const greeting = name2 ? `Happy Anniversary, ${p1.first_name} and ${name2}!` : `Happy Anniversary, ${p1.first_name}!`;
+    if (members.length < 2) { skipped++; continue; }
+    const name2 = members[1].first_name;
+    const greeting = `Happy Anniversary, ${p1.first_name} and ${name2}!`;
     const content = `${greeting} Wishing you a blessed anniversary. - Timothy Lutheran Church`;
     for (const p of members) {
       const e164 = normalizePhone(p.phone);
@@ -347,6 +355,8 @@ export async function sendAnniversaryEmails(env) {
      WHERE active=1 AND (status IS NULL OR status='active')
        AND (deceased=0 OR deceased IS NULL) AND anniversary_date != ''
        AND LOWER(member_type) NOT IN ('visitor','inactive','other','organization')
+       AND LOWER(marital_status) != 'widowed'
+       AND household_id IS NOT NULL AND household_id != ''
        AND strftime('%m-%d', anniversary_date) = ?
        AND NOT EXISTS (
          SELECT 1 FROM people p2
@@ -403,15 +413,9 @@ export async function sendAnniversaryEmails(env) {
         }
       }
     } else {
-      if (!p1.email) continue;
-      hhInfo.set(String(hhKey), { p1, p2: null, members });
-      sends.push({
-        kind: 'solo', hhKey, p1,
-        to: p1.email, subject: `Happy Anniversary, ${p1.first_name}!`,
-        text: anniversaryText(p1.first_name, null),
-        html: anniversaryHtml(p1.first_name, null),
-        errLabel: p1.first_name,
-      });
+      // No living household partner found — skip solo anniversary sends
+      skipped++;
+      continue;
     }
   }
 
