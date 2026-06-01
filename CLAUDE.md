@@ -599,7 +599,7 @@ Run through this at the end of any session before pushing, or at the start of a 
 ### Frontend Consistency
 - [ ] New API calls use `api('/admin/api/...')` wrapper, not raw `fetch()`
 - [ ] New modals have a unique ID and use `openModal(id)` / `closeModal(id)`
-- [ ] `DEPLOY_VERSION` bumped in `src/frontend/js-core.js` on every commit that changes the frontend
+- [ ] `DEPLOY_VERSION` bumped in `src/frontend/js-core.js` on every commit that changes the frontend (use semver `major.minor.patch` — bump patch for bug fixes, minor for new features, major for breaking changes)
 - [ ] New tabs added to `showTab()` labels map and trigger their load function
 
 ### Data Integrity
@@ -608,10 +608,10 @@ Run through this at the end of any session before pushing, or at the start of a 
 - [ ] New person/household fields default to `''` (empty string) not NULL where possible — avoids COALESCE boilerplate everywhere
 
 ### Before Every Push
-- [ ] `DEPLOY_VERSION` is bumped
+- [ ] `DEPLOY_VERSION` is bumped (semver `major.minor.patch`)
 - [ ] `NOTES.md` Recent Changes has an entry for this version
 - [ ] `CLAUDE.md` Queued Items updated — new items added, completed items checked off
-- [ ] Pushed to the current session branch (per-session `claude/*` branch), not main
+- [ ] Pushed to a `feature/<short-description>` branch, not main
 
 ---
 
@@ -625,7 +625,7 @@ Run through this at the end of any session before pushing, or at the start of a 
 - Dashboard birthday/anniversary: two separate cards since v23. Copy functions: `dashCopyBirthdays()` / `dashCopyAnniversaries()`. Anniversary rows are couple-paired by household+date in the API before returning.
 - `api()` helper in frontend handles 401→redirect. Always use it instead of raw `fetch` for `/admin/api/*` calls.
 - All modals have specific IDs (e.g. `person-modal`, `hh-modal`). There is no generic `modal-overlay`. Use `openModal(id)` / `closeModal(id)`.
-- DEPLOY_VERSION is at the top of `src/frontend/js-core.js` (moved from `html-chms.js` after IN3 split). Bump it on every commit that changes the frontend.
+- DEPLOY_VERSION is at the top of `src/frontend/js-core.js` (moved from `html-chms.js` after IN3 split). Bump it on every commit that changes the frontend. Format: `major.minor.patch` semver — patch for fixes, minor for new features, major for breaking changes. Started at `1.0.0` (2026-06-01, formerly v233).
 - **Editing volunteer.timothystl.org**: do NOT search/edit `src/html-templates.js` for ministry copy — the public page is assembled from `src/public/` modules. To tweak a ministry, edit `src/public/ministries/<name>.js` directly. Global CSS lives in `src/public/head.js`; all JS (form handlers, routing) in `src/public/scripts.js`.
 - **Brand tokens** (TLC Gather): `--color-navy:#1E2D4A`, `--color-teal:#2E7EA6`, `--color-gold:#C9973A`, `--color-cream:#F8F4EE`. Fonts: Cormorant Garamond (display) + DM Sans (head/body). Three-pillar pill system in topbar driven by `pillars` map in `js-core.js` `showTab()`.
 - **member_type** is stored lowercased. Both Breeze write paths (per-person at line ~2442, bulk at line ~2777 of `api-import.js`) call `.toLowerCase()` before binding; a defensive `UPDATE … SET member_type=LOWER(member_type)` runs at end of each sync batch as a safety net. Frontend filters use `LOWER()` comparison.
@@ -638,4 +638,4 @@ Run through this at the end of any session before pushing, or at the start of a 
 
 ## Dev Branch
 
-Create a new branch for each session's work (pattern: `claude/<short-task>-<id>`). Do not push directly to main. Open a draft PR after pushing; GitHub Actions deploys on merge.
+Create a new branch for each session's work using the pattern `feature/<short-description>` (e.g. `feature/anniversary-widowed-fix`). Do not push directly to main. Open a draft PR after pushing; GitHub Actions deploys on merge.
